@@ -1,3 +1,4 @@
+#!/usr/bin/env ruby
 require 'rubygems'
 require 'digest/md5'
 
@@ -8,7 +9,14 @@ class MethodCache
   end
   def method_missing(m, *args, &block)
     key = args.to_s
-    @cache[key] ||= @delegate.send(m,*args,&block)
+    begin
+      @cache[key] ||= @delegate.send(m,*args,&block)
+    rescue Exception => exc
+      exc.backtrace.each do | c |
+        raise "#{c} : #{exc.message}" if c =~ /build.rmk/
+      end
+      raise "#{@delegate.to_s}:#{m.to_s} : #{exc.message}"
+    end
   end
 end
 
@@ -95,6 +103,9 @@ class BuildFile
   def file(name)
     File.join(@dir,name)
   end
+  def to_s()
+    @file
+  end
 end
 
 class BuildFileCache
@@ -119,4 +130,9 @@ end
 build_file_cache = BuildFileCache.new()
 build_file = build_file_cache.load("build.rmk")
 task = ARGV[0] || "all"
-p build_file.send(task.intern)
+begin
+  p build_file.send(task.intern)
+rescue Exception => exc
+  STDERR.puts exc.message
+  exit(1)
+end

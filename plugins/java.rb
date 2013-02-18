@@ -5,7 +5,7 @@ module Java
       classes_dir = File.join(build_dir(),"classes")
       FileUtils.rm_rf(classes_dir)
       FileUtils.mkdir_p(classes_dir)
-      system("javac -cp #{jarfiles.join(":")} -d #{classes_dir} #{files}")
+      system("javac -cp #{jarfiles.join(":")} -d #{classes_dir} #{files.join(" ")}")
       Dir.glob(File.join(classes_dir,"**/*.class"))
     end
   end
