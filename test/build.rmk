@@ -1,0 +1,18 @@
+
+plugin 'java'
+plugin 'maven'
+
+
+Maven.repository = "http://dixon.wdf.sap.corp:8081/artifactory/repo"
+
+def classfiles()
+  dependency(".").test() 
+end
+
+def test()
+  jar("test",javac(glob("src/main/java/**/*.java"),mvn("org.apache.tapestry","tapestry-core","5.3.6")))
+end
+
+def all()
+  classfiles()
+end
