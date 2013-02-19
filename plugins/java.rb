@@ -1,3 +1,5 @@
+require 'tempfile'
+
 module Java
 
   def javac(files,jarfiles, options = {})
@@ -9,14 +11,25 @@ module Java
       Dir.glob(File.join(classes_dir,"**/*.class"))
     end
   end
+  
   def jar(name,classfiles, resourcefiles = [], options= {})
     build_cache(classfiles+resourcefiles) do
       classes_dir = File.join(build_dir(),"classes")
       lib_dir = File.join(build_dir,"lib");
       result = File.join(lib_dir,name + ".jar")
       FileUtils.mkdir_p(lib_dir)
-      system("jar cf #{result} -C #{classes_dir} #{classfiles.map{ | x | File.relative_path_from(x,classes_dir)}.join(" ")}")
+      file = Tempfile.new('jar')
+      begin
+        classfiles.each do | cls |
+          file.puts("-C #{classes_dir} #{File.relative_path_from(cls,classes_dir) }")
+        end
+        file.close
+        system("jar cf #{result} @#{file.path}")
+      ensure
+        # file.unlink
+      end
       [ result ]
     end
   end
+  
 end

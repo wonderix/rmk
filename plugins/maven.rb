@@ -9,8 +9,26 @@ module Maven
   include Nokogiri
 
 
+  class MetadataListener < XML::SAX::Document
+  
+    attr_reader :version
+    def initialize()
+      @version = ""
+      @stack = []
+    end
+    def start_element(element, attributes)
+      @stack.push(element)
+    end
+    def end_element(element)
+      @stack.pop
+    end
+    def characters(text)
+      @version = text if @stack == %w(metadata versioning snapshotVersions snapshotVersion value)
+    end
+  end
+
   class PomListener < XML::SAX::Document
-    def initilize()
+    def initialize()
      reset()
     end
     
@@ -25,6 +43,7 @@ module Maven
       @artifact = ""
       @version = ""
       @scope = "compile"
+      @optional = ""
     end
     
     def start_element(element, attributes)
@@ -34,17 +53,21 @@ module Maven
     
     def end_element(element)
       @stack.pop
-      case element
-      when "groupId"
-        @group = @current
-      when "artifactId"
-        @artifact = @current
-      when "version"
-        @version = @current
-      when "scope"
-        @scope = @current
-      when "dependency"
-        @block.call(@group,@artifact,@version) if @scope == "compile"  && !@version.empty?() && @version[0] != ?$ && @stack[-1] == "dependencies" && @stack[-2] == "project"
+      if @stack == %w(project dependencies dependency) 
+        case element
+        when "groupId"
+          @group = @current
+        when "artifactId"
+          @artifact = @current
+        when "version"
+          @version = @current
+        when "scope"
+          @scope = @current
+        when "optional"
+          @optional = @current
+        end
+      elsif @stack == %w(project dependencies) && element == "dependency"
+        @block.call(@group,@artifact,@version) if @scope == "compile"  && !@version.empty?() && @version[0] != ?$ && @optional != "true"
         reset()
       end
       @current = ""
@@ -73,8 +96,15 @@ module Maven
   end
   
   def mvn(group_id,artifact_id,version)
-    artifact = "#{group_id.tr(".","/")}/#{artifact_id}/#{version}/#{artifact_id}-#{version}"
+    artifact_dir = "#{group_id.tr(".","/")}/#{artifact_id}/#{version}"
+      
     begin
+      if version[-8,8] == "SNAPSHOT"
+        listener = MetadataListener.new
+        parser = XML::SAX::Parser.new(listener)
+        parser.parse_file(mvn_cache("#{artifact_dir}/maven-metadata.xml"))
+      end
+      artifact = "#{artifact_dir}/#{artifact_id}-#{version}"
       result = [ mvn_cache("#{artifact}.jar") ]
       listener = PomListener.new
       listener.callback do |group,art,vers|
@@ -98,6 +128,7 @@ module Maven
 
 end
 
+# Used to convert pom to rmk
 if __FILE__ == $0
   listener = Maven::PomListener.new
   listener.callback do |group,artifact,version|
