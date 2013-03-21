@@ -3,7 +3,7 @@ plugin 'java'
 plugin 'maven'
 
 
-Maven.repository = "http://dixon.wdf.sap.corp:8081/artifactory/repo"
+Maven.repository = "http://repo1.maven.org/maven2"
 
 def classfiles()
   project(".").test() 
