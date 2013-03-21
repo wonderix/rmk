@@ -6,7 +6,7 @@ plugin 'maven'
 Maven.repository = "http://dixon.wdf.sap.corp:8081/artifactory/repo"
 
 def classfiles()
-  dependency(".").test() 
+  project(".").test() 
 end
 
 def test()

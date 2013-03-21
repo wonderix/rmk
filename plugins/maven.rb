@@ -28,12 +28,14 @@ module Maven
   end
 
   class PomListener < XML::SAX::Document
+    attr_accessor :skip_invalid_version
     def initialize()
      reset()
+     @skip_invalid_version = true
     end
     
-    def callback(&block)
-      @block = block
+    def dependency_callback(&block)
+      @dependency_callback = block
       @stack = []
     end
     
@@ -67,7 +69,7 @@ module Maven
           @optional = @current
         end
       elsif @stack == %w(project dependencies) && element == "dependency"
-        @block.call(@group,@artifact,@version) if @scope == "compile"  && !@version.empty?() && @version[0] != ?$ && @optional != "true"
+        @dependency_callback.call(@group,@artifact,@version) if @scope == "compile"  && ( !@skip_invalid_version || (!@version.empty?() && @version[0] != ?$)) && @optional != "true"
         reset()
       end
       @current = ""
@@ -107,7 +109,7 @@ module Maven
       artifact = "#{artifact_dir}/#{artifact_id}-#{version}"
       result = [ mvn_cache("#{artifact}.jar") ]
       listener = PomListener.new
-      listener.callback do |group,art,vers|
+      listener.dependency_callback do |group,art,vers|
         result.concat(mvn(group,art,vers))
       end
       parser = XML::SAX::Parser.new(listener)
@@ -131,7 +133,8 @@ end
 # Used to convert pom to rmk
 if __FILE__ == $0
   listener = Maven::PomListener.new
-  listener.callback do |group,artifact,version|
+  listener.skip_invalid_version = false
+  listener.dependency_callback do |group,artifact,version|
     puts("  mvn('#{group}','#{artifact}','#{version}')")
   end
   parser = Nokogiri::XML::SAX::Parser.new(listener)

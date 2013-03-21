@@ -2,6 +2,8 @@ require 'tempfile'
 
 module Java
 
+  include BuildTools
+  
   def javac(files,jarfiles, options = {})
     build_cache(files+jarfiles) do
       classes_dir = File.join(build_dir(),"classes")

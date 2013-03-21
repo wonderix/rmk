@@ -36,6 +36,15 @@ class File
   end
 end
 
+
+module BuildTools
+  def system(cmd)
+    puts(cmd[0,70]+"...")
+    Kernel.system(cmd)
+    raise "Error running #{cmd}" unless $? == 0
+  end
+end
+
 class BuildFile
 
   BUILD_DIR = "build"
@@ -46,7 +55,7 @@ class BuildFile
     @dir = File.dirname(file)
   end
   
-  def dependency(file)
+  def project(file)
     @build_file_cache.load(file,@dir)
   end
   
@@ -55,11 +64,6 @@ class BuildFile
     include const_get(name.capitalize)
   end
   
-  def system(cmd)
-    puts(cmd)
-    Kernel.system(cmd)
-    raise "Error running #{cmd}" unless $? == 0
-  end
   
   def build_cache(depends,&block)
     md5 = Digest::MD5.new
@@ -68,6 +72,10 @@ class BuildFile
     md5.update(c[1])
     depends.each { | d | md5.update(d) }
     file = File.join(@dir,BUILD_DIR,"cache/#{md5.hexdigest}")
+    begin
+      depends += File.open(file +".dep","rb") { | f | Marshal.load(f) } 
+    rescue Errno::ENOENT
+    end
     rebuild = true
     if File.readable?(file)
       rebuild = false
@@ -79,9 +87,11 @@ class BuildFile
       end
     end
     if rebuild
-      result = block.call() 
+      hidden = []
+      result = block.call(hidden) 
       FileUtils.mkdir_p(File.dirname(file))
       File.open(file,"wb") { | f | Marshal.dump(result,f) }
+      File.open(file +".dep","wb") { | f | Marshal.dump(hidden,f) } unless hidden.empty?
     else
       result = File.open(file,"rb") { | f | Marshal.load(f) }
     end 
@@ -131,8 +141,10 @@ build_file_cache = BuildFileCache.new()
 build_file = build_file_cache.load("build.rmk")
 task = ARGV[0] || "all"
 begin
-  p build_file.send(task.intern)
+  build_file.send(task.intern)
+  puts "Build OK"
 rescue Exception => exc
   STDERR.puts exc.message
+  puts "Build Failed"
   exit(1)
 end
