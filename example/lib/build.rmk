@@ -1,0 +1,15 @@
+
+plugin 'java'
+plugin 'maven'
+plugin 'gnu'
+
+
+Maven.repository = "http://repo1.maven.org/maven2"
+
+def compile_cpp()
+  cc(glob("src/main/cpp/*.cpp"),[])
+end
+
+def compile_java()
+  jar("test",javac(glob("src/main/java/**/*.java"),mvn("org.apache.tapestry","tapestry-core","5.3.6")))
+end

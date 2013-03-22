@@ -1,0 +1,17 @@
+
+plugin 'java'
+plugin 'maven'
+plugin 'gnu'
+
+
+Maven.repository = "http://repo1.maven.org/maven2"
+
+def compile_cpp()
+  dependencies = project("../lib").compile_cpp
+  ld("hello",cc(glob("src/main/cpp/*.cpp"),dependencies)+dependencies)
+end
+
+def compile_java()
+  jar("main",javac(glob("src/main/java/**/*.java"),project("../lib").compile_java))
+end
+

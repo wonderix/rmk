@@ -8,14 +8,14 @@ class MethodCache
     @delegate = delegate
   end
   def method_missing(m, *args, &block)
-    key = args.to_s
+    key = m.to_s + args.to_s
     begin
       @cache[key] ||= @delegate.send(m,*args,&block)
     rescue Exception => exc
       exc.backtrace.each do | c |
-        raise "#{c} : #{exc.message}" if c =~ /build.rmk/
+        raise "#{c} : #{exc.message} #{exc.backtrace}" if c =~ /build.rmk/
       end
-      raise "#{@delegate.to_s}:#{m.to_s} : #{exc.message}"
+      raise "#{@delegate.to_s}:#{m.to_s} : #{exc.message} #{exc.backtrace}"
     end
   end
 end
@@ -39,7 +39,8 @@ end
 
 module BuildTools
   def system(cmd)
-    puts(cmd[0,70]+"...")
+    message = cmd.gsub(/(\/[^\s:]*\/)/) { File.relative_path_from($1,Dir.getwd) + "/" }
+    puts(message)
     Kernel.system(cmd)
     raise "Error running #{cmd}" unless $? == 0
   end
@@ -70,7 +71,7 @@ class BuildFile
     c = caller
     md5.update(c[0])
     md5.update(c[1])
-    depends.each { | d | md5.update(d) }
+    depends.each { | d | md5.update(d.to_s) }
     file = File.join(@dir,BUILD_DIR,"cache/#{md5.hexdigest}")
     begin
       depends += File.open(file +".dep","rb") { | f | Marshal.load(f) } 
