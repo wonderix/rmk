@@ -26,12 +26,15 @@ class File
     s = src.split("/")
     b = base.split("/")
     j = 0
+    return src if s[1] != b[1]
+    return "./" if s == b
     for i in 0...s.length
       if s[i] != b[i]
         j = i
         break
       end
     end
+    return "." if j == 0 && s.length == b.length
     (Array.new(b.length-j,"..") + s[j..-1]).join("/")
   end
 end
@@ -56,15 +59,24 @@ class BuildFile
     @dir = File.dirname(file)
   end
   
+  def self.file=(value)
+    @dir = File.dirname(value)
+  end
+  
   def project(file)
     @build_file_cache.load(file,@dir)
   end
   
   def self.plugin(name)
-    require File.join(File.expand_path(File.dirname(File.dirname(__FILE__))),"plugins",name + ".rb")
+    Kernel.require File.join(File.expand_path(File.dirname(File.dirname(__FILE__))),"plugins",name + ".rb")
     include const_get(name.capitalize)
   end
   
+  def self.load(name)
+    file = File.join(@dir,name)
+    content = File.read(file)
+    self.module_eval(content,file,1)
+  end
   
   def build_cache(depends,&block)
     md5 = Digest::MD5.new
@@ -102,6 +114,8 @@ class BuildFile
   end
   
   def glob(pattern)
+    p caller
+    p File.join(@dir,pattern)
     Dir.glob(File.join(@dir,pattern))
   end
   
@@ -114,10 +128,12 @@ class BuildFile
   end
   
   def file(name)
-    File.join(@dir,name)
+    return File.join(@dir,name) if name.is_a?(String)
+    name.to_a.map{ | x | File.join(@dir,x) }
   end
+  
   def to_s()
-    @file
+    @@file
   end
 end
 
@@ -133,6 +149,7 @@ class BuildFileCache
   def load_inner(file)
     build_file = Class.new(BuildFile)
     content = File.read(file)
+    build_file.file = file
     build_file.module_eval(content,file,1)
     MethodCache.new(build_file.new(self,file))
   end

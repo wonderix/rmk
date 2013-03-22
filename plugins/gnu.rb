@@ -1,3 +1,4 @@
+require 'fileutils'
 
 class CppArchive
   attr_accessor :objects, :includes
@@ -44,7 +45,7 @@ module Gnu
         ofile = File.join(target_dir,basename + ".o")
         dfile = File.join(target_dir,basename + ".d")
         FileUtils.mkdir_p(target_dir)
-        system("gcc -x c++ -o #{ofile} #{includes.join(" ")} -MD -c #{cpp}")
+        system("gcc -x c++ #{options[:flags].to_s} -I#{dir} -o #{ofile} #{includes.join(" ")} -MD -c #{cpp}")
         content = File.read(dfile)
         File.delete(dfile)
         content.gsub!(/\b[A-Z]:\//i,"/")
@@ -57,6 +58,7 @@ module Gnu
       end
     end
     result.includes.concat(files.map{ | x | "-I" + File.dirname(x)}.uniq)
+    result.includes.push("-I" + dir()) if files.empty?
     result.includes.concat(includes)
     [ result ]
   end
