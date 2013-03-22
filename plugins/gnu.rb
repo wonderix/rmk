@@ -14,6 +14,14 @@ class CppArchive
   def inspect()
     return @objects.inspect
   end
+  def mtime()
+    mtime = Time.at(0)
+    @objects.each do | o |
+      m = File.mtime(o)
+      mtime = m if m > mtime
+    end
+    mtime
+  end
 end
 
 

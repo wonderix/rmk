@@ -80,8 +80,10 @@ class BuildFile
     rebuild = true
     if File.readable?(file)
       rebuild = false
+      mtime = File.mtime(file)
       depends.each do | d |
-        if File.mtime(d) > File.mtime(file)
+        dmtime = d.is_a?(String) ? File.mtime(d) : d.mtime
+        if dmtime > mtime
           rebuild = true 
           break
         end
