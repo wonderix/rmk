@@ -1,6 +1,16 @@
 # rmk
 
-rmk is a translation tool with a mix of features of make, rake maven, Scons and gradle. Unlike these tools rmk follows the idea that translation rules are not configured but implemented like normal code. Make targets become simple method calls. All configuration parameters are passed explicitly.
+rmk is a software construction tool with a mix of features of make, rake maven, Scons and gradle. Unlike these tools rmk follows the idea that translation rules are not configured but implemented like normal code. Make targets become simple method calls. All configuration parameters are passed explicitly.
+
+
+## Features
+
+* Support for java projects
+* Support for C++ projects
+* Support for maven dependencies
+* Project dependencies
+* Automatic dependency management for C and C++
+
 
 ## C++ Example
 
@@ -20,7 +30,7 @@ You can run this build script with
     plugin 'java' # Load java support
     
     def compile_java()
-      # compile all files in src/main/java/**/*.java an include them in one jar file named test
+      # compile all files in src/main/java/**/*.java and include them in one jar file named test
       jar("test",javac(glob("src/main/java/**/*.java"),[])) 
     end
 
@@ -42,7 +52,7 @@ You can run this build script with
 
 ## Dependency management
 
-You can refer to build results from other directories by loading the project an calling the corresponding method.
+You can refer to build results from other directories by loading the project and calling the corresponding method.
 
     plugin 'java'
 
