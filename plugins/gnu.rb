@@ -33,11 +33,13 @@ module Gnu
   TARGET = "i486-linux"
 
   def cc(files,depends, options = {}) 
+    depends = depends.uniq
     result = CppArchive.new
     includes = [] 
     depends.each do | d |
       includes.concat(d.includes) if d.is_a?(CppArchive)
     end
+    includes.uniq!
     files.each do | cpp |
       result.objects << build_cache([cpp]) do | depends |
         basename, suffix  = File.basename(cpp).split(".")

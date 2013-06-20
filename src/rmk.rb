@@ -114,8 +114,6 @@ class BuildFile
   end
   
   def glob(pattern)
-    p caller
-    p File.join(@dir,pattern)
     Dir.glob(File.join(@dir,pattern))
   end
   
@@ -133,7 +131,7 @@ class BuildFile
   end
   
   def to_s()
-    @@file
+    @file
   end
 end
 
