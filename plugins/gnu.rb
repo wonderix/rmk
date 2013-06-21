@@ -40,7 +40,7 @@ module Gnu
       includes.concat(d.includes) if d.is_a?(CppArchive)
     end
     includes.uniq!
-    files.each do | cpp |
+    parallel(files) do | cpp |
       result.objects << build_cache([cpp]) do | depends |
         basename, suffix  = File.basename(cpp).split(".")
         target_dir = File.join(build_dir,TARGET)
@@ -71,10 +71,13 @@ module Gnu
   def ld(name,depends, options = {}) 
     build_cache(depends) do
       target_dir = File.join(build_dir,TARGET)
+      FileUtils.mkdir_p(target_dir)
       ofile = File.join(target_dir,name)
       objects = []
       depends.each { | d | objects.concat(d.to_a) }
-      system("g++ #{objects.join(" ")} -o #{ofile} ")
+      cfile = File.join(target_dir,name + ".cmd")
+      File.open(cfile,"w") { | f | f.write(objects.join(" ")) }
+      system("g++ @#{cfile} -o #{ofile} ")
       ofile
     end
   end

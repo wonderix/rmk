@@ -1,6 +1,8 @@
 #!/usr/bin/env ruby
 require 'rubygems'
 require 'digest/md5'
+require 'eventmachine'
+require 'fiber'
 
 class MethodCache
   def initialize(delegate)
@@ -12,10 +14,10 @@ class MethodCache
     begin
       @cache[key] ||= @delegate.send(m,*args,&block)
     rescue Exception => exc
-      exc.backtrace.each do | c |
-        raise "#{c} : #{exc.message} #{exc.backtrace}" if c =~ /build.rmk/
-      end
-      raise "#{@delegate.to_s}:#{m.to_s} : #{exc.message} #{exc.backtrace}"
+      #exc.backtrace.each do | c |
+      #  raise "#{c} : #{exc.message} #{exc.backtrace.join("\n")}" if c =~ /build.rmk/
+      #end
+      raise "#{@delegate.to_s}:#{m.to_s} : #{exc.message} #{exc.backtrace.join("\n")}"
     end
   end
 end
@@ -39,13 +41,45 @@ class File
   end
 end
 
+module PipeReader
+  def initialize(fiber)
+    @fiber = fiber
+  end
+  def receive_data(data)
+    STDOUT.write(data)
+  end
+  def unbind
+    @fiber.resume get_status.exitstatus
+  end
+end
 
 module BuildTools
   def system(cmd)
     message = cmd.gsub(/(\/[^\s:]*\/)/) { File.relative_path_from($1,Dir.getwd) + "/" }
     puts(message)
-    Kernel.system(cmd)
-    raise "Error running #{cmd}" unless $? == 0
+    EventMachine.popen(cmd, PipeReader,Fiber.current)
+    raise "Error running xxx" unless Fiber.yield == 0
+  end
+  def parallel(files,&block)
+    current = Fiber.current
+    files.each do  | file |
+      Fiber.new do 
+        begin
+          block.call(file)
+          EventMachine.next_tick do
+            current.resume nil
+          end
+        rescue Exception => exc
+          EventMachine.next_tick do
+            current.resume exc if current.alive?
+          end
+        end
+      end.resume
+    end
+    files.each do  | file |
+        exc = Fiber.yield
+        raise exc if exc
+    end
   end
 end
 
@@ -153,16 +187,21 @@ class BuildFileCache
   end
 end
 
-
-    
-build_file_cache = BuildFileCache.new()
-build_file = build_file_cache.load("build.rmk")
-task = ARGV[0] || "all"
-begin
-  build_file.send(task.intern)
-  puts "Build OK"
-rescue Exception => exc
-  STDERR.puts exc.message
-  puts "Build Failed"
-  exit(1)
+result = 0
+EventMachine.run do
+  Fiber.new do 
+    build_file_cache = BuildFileCache.new()
+    build_file = build_file_cache.load("build.rmk")
+    task = ARGV[0] || "all"
+    begin
+      build_file.send(task.intern)
+      puts "Build OK"
+    rescue Exception => exc
+      STDERR.puts exc.message
+      puts "Build Failed"
+      result = 1
+    end
+    EventMachine.stop
+  end.resume
 end
+exit(result)
