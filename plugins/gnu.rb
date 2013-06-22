@@ -40,8 +40,9 @@ module Gnu
       includes.concat(d.includes) if d.is_a?(CppArchive)
     end
     includes.uniq!
-    parallel(files) do | cpp |
-      result.objects << build_cache([cpp]) do | depends |
+    futures = []
+    files.each do | cpp |
+      futures << build_cache([cpp]) do | depends |
         basename, suffix  = File.basename(cpp).split(".")
         target_dir = File.join(build_dir,TARGET)
         ofile = File.join(target_dir,basename + ".o")
@@ -59,6 +60,7 @@ module Gnu
         ofile
       end
     end
+    result.objects.concat(futures.map { | f | f.value })
     result.includes.concat(files.map{ | x | "-I" + File.dirname(x)}.uniq)
     result.includes.push("-I" + dir()) if files.empty?
     result.includes.concat(includes)
@@ -79,6 +81,6 @@ module Gnu
       File.open(cfile,"w") { | f | f.write(objects.join(" ")) }
       system("g++ @#{cfile} -o #{ofile} ")
       ofile
-    end
+    end.value
   end
 end

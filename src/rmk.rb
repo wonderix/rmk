@@ -53,6 +53,36 @@ module PipeReader
   end
 end
 
+class BuildFuture
+  def initialize(&block)
+    current = Fiber.current
+		Fiber.new do 
+			begin
+				result = block.call()
+				EventMachine.next_tick do
+					current.resume result if current.alive?
+				end
+			rescue Exception => exc
+				EventMachine.next_tick do
+					current.resume exc if current.alive?
+				end
+			end
+		end.resume
+  end
+  def value()
+		result = Fiber.yield
+		raise result if result.is_a?(Exception)
+		result
+  end
+end
+
+class ImmediateFuture
+	attr_reader :value
+  def initialize(value)
+    @value = value
+  end
+end
+
 module BuildTools
   def system(cmd)
     message = cmd.gsub(/(\/[^\s:]*\/)/) { File.relative_path_from($1,Dir.getwd) + "/" }
@@ -61,25 +91,13 @@ module BuildTools
     raise "Error running xxx" unless Fiber.yield == 0
   end
   def parallel(files,&block)
-    current = Fiber.current
+    futures = []
     files.each do  | file |
-      Fiber.new do 
-        begin
-          block.call(file)
-          EventMachine.next_tick do
-            current.resume nil
-          end
-        rescue Exception => exc
-          EventMachine.next_tick do
-            current.resume exc if current.alive?
-          end
-        end
-      end.resume
+      futures << BuildFuture.new do 
+				block.call(file)
+			end
     end
-    files.each do  | file |
-        exc = Fiber.yield
-        raise exc if exc
-    end
+    futures.each { | f | f.value() }
   end
 end
 
@@ -136,13 +154,16 @@ class BuildFile
       end
     end
     if rebuild
-      hidden = []
-      result = block.call(hidden) 
-      FileUtils.mkdir_p(File.dirname(file))
-      File.open(file,"wb") { | f | Marshal.dump(result,f) }
-      File.open(file +".dep","wb") { | f | Marshal.dump(hidden,f) } unless hidden.empty?
+    	result = BuildFuture.new do
+      	hidden = []
+      	res = block.call(hidden) 
+      	FileUtils.mkdir_p(File.dirname(file))
+      	File.open(file,"wb") { | f | Marshal.dump(res,f) }
+      	File.open(file +".dep","wb") { | f | Marshal.dump(hidden,f) } unless hidden.empty?
+      	res
+      end
     else
-      result = File.open(file,"rb") { | f | Marshal.load(f) }
+      result = ImmediateFuture.new(File.open(file,"rb") { | f | Marshal.load(f) })
     end 
     result
   end

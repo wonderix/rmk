@@ -12,14 +12,14 @@ module Java
       FileUtils.mkdir_p(classes_dir)
       system("javac -cp #{jarfiles.join(":")} -d #{classes_dir} #{files.join(" ")}")
       Dir.glob(File.join(classes_dir,"**/*.class"))
-    end
+    end.value()
   end
   
   def jar(name,classfiles, resourcefiles = [], options= {})
+    lib_dir = File.join(build_dir,"lib");
+    result = File.join(lib_dir,name + ".jar")
     build_cache(classfiles+resourcefiles) do
       classes_dir = File.join(build_dir(),"classes")
-      lib_dir = File.join(build_dir,"lib");
-      result = File.join(lib_dir,name + ".jar")
       FileUtils.mkdir_p(lib_dir)
       file = Tempfile.new('jar')
       begin
@@ -32,7 +32,7 @@ module Java
         # file.unlink
       end
       [ result ]
-    end
+    end.value()
   end
   
 end
