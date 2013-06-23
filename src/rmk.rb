@@ -3,6 +3,7 @@ require 'rubygems'
 require 'digest/md5'
 require 'eventmachine'
 require 'fiber'
+require 'optparse'
 
 class MethodCache
   def initialize(delegate)
@@ -22,6 +23,17 @@ class MethodCache
   end
 end
 
+class String
+  def value()
+    self
+  end
+end
+
+class Array
+	def value()
+		self
+	end
+end
 
 class File
   def self.relative_path_from(src,base)
@@ -54,50 +66,43 @@ module PipeReader
 end
 
 class BuildFuture
-  def initialize(&block)
+  def initialize(name,&block)
+  	@name = name
+  	@value = nil
     current = Fiber.current
 		Fiber.new do 
 			begin
-				result = block.call()
-				EventMachine.next_tick do
-					current.resume result if current.alive?
-				end
+				@value = block.call() || true
 			rescue Exception => exc
-				EventMachine.next_tick do
-					current.resume exc if current.alive?
-				end
+				@value = exc
+			end
+			EventMachine.next_tick do
+				current.resume if current.alive?
 			end
 		end.resume
   end
+  def to_s()
+  	"BuildFuture:#{@name}"
+  end
   def value()
-		result = Fiber.yield
-		raise result if result.is_a?(Exception)
-		result
+		while @value.nil? 
+			Fiber.yield
+		end
+		raise @value if @value.is_a?(Exception)
+		@value
   end
 end
 
-class ImmediateFuture
-	attr_reader :value
-  def initialize(value)
-    @value = value
-  end
-end
 
 module BuildTools
+	def self.relative(msg)
+    msg.to_s.gsub(/(\/[^\s:]*\/)/) { File.relative_path_from($1,Dir.getwd) + "/" }
+	end		
   def system(cmd)
-    message = cmd.gsub(/(\/[^\s:]*\/)/) { File.relative_path_from($1,Dir.getwd) + "/" }
+    message = BuildTools.relative(cmd)
     puts(message)
     EventMachine.popen(cmd, PipeReader,Fiber.current)
     raise "Error running xxx" unless Fiber.yield == 0
-  end
-  def parallel(files,&block)
-    futures = []
-    files.each do  | file |
-      futures << BuildFuture.new do 
-				block.call(file)
-			end
-    end
-    futures.each { | f | f.value() }
   end
 end
 
@@ -105,10 +110,13 @@ class BuildFile
 
   BUILD_DIR = "build"
   
-  def initialize(build_file_cache,file)
+  attr_accessor :md5
+  def initialize(build_file_cache,file,opts,md5)
     @build_file_cache = build_file_cache
     @file = file
     @dir = File.dirname(file)
+    @opts = opts
+    @md5 = md5
   end
   
   def self.file=(value)
@@ -116,7 +124,7 @@ class BuildFile
   end
   
   def project(file)
-    @build_file_cache.load(file,@dir)
+    @build_file_cache.load(file,@dir,@opts)
   end
   
   def self.plugin(name)
@@ -124,18 +132,11 @@ class BuildFile
     include const_get(name.capitalize)
   end
   
-  def self.load(name)
-    file = File.join(@dir,name)
-    content = File.read(file)
-    self.module_eval(content,file,1)
-  end
-  
   def build_cache(depends,&block)
     md5 = Digest::MD5.new
     c = caller
-    md5.update(c[0])
-    md5.update(c[1])
-    depends.each { | d | md5.update(d.to_s) }
+    md5.update(@md5)
+    depends.each { | d | md5.update(d.to_s); }
     file = File.join(@dir,BUILD_DIR,"cache/#{md5.hexdigest}")
     begin
       depends += File.open(file +".dep","rb") { | f | Marshal.load(f) } 
@@ -146,15 +147,18 @@ class BuildFile
       rebuild = false
       mtime = File.mtime(file)
       depends.each do | d |
-        dmtime = d.is_a?(String) ? File.mtime(d) : d.mtime
+        dmtime = d.respond_to?(:mtime) ? d.mtime : File.mtime(d)
         if dmtime > mtime
+        	raise "Rebuilding #{BuildTools.relative(file)}(#{mtime}) because #{BuildTools.relative(d)}(#{dmtime}) is newer" if @opts[:why]
           rebuild = true 
           break
         end
       end
+    else
+    	raise "Rebuilding #{file}) because it doesn't exist" if @opts[:why]
     end
     if rebuild
-    	result = BuildFuture.new do
+    	result = BuildFuture.new(depends) do
       	hidden = []
       	res = block.call(hidden) 
       	FileUtils.mkdir_p(File.dirname(file))
@@ -163,7 +167,7 @@ class BuildFile
       	res
       end
     else
-      result = ImmediateFuture.new(File.open(file,"rb") { | f | Marshal.load(f) })
+      result = File.open(file,"rb") { | f | Marshal.load(f) }
     end 
     result
   end
@@ -194,25 +198,37 @@ class BuildFileCache
   def initialize()
     @cache = Hash.new
   end
-  def load(file,dir = ".")
+  def load(file, dir = ".", opts = {})
     file = File.expand_path(File.join(dir,file))
     file = File.join(file,"build.rmk") if File.directory?(file)
-    @cache[file] ||= load_inner(file)
+    @cache[file] ||= load_inner(file,opts)
   end
-  def load_inner(file)
+  def load_inner(file,opts)
     build_file = Class.new(BuildFile)
     content = File.read(file)
     build_file.file = file
     build_file.module_eval(content,file,1)
-    MethodCache.new(build_file.new(self,file))
+    MethodCache.new(build_file.new(self,file,opts,Digest::MD5.hexdigest(content)))
   end
 end
+
+options = {:dir => '.'}
+OptionParser.new do |opts|
+  opts.banner = "Usage: rmk.rb [options] [target]"
+
+  opts.on("-w", "--why", "Show why rebuilding a target") do |v|
+    options[:why] = v
+  end
+  opts.on("-C", "--directory", "change to directory") do |v|
+    options[:dir] = v
+  end
+end.parse!
 
 result = 0
 EventMachine.run do
   Fiber.new do 
     build_file_cache = BuildFileCache.new()
-    build_file = build_file_cache.load("build.rmk")
+    build_file = build_file_cache.load("build.rmk",options[:dir],options)
     task = ARGV[0] || "all"
     begin
       build_file.send(task.intern)

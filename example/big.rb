@@ -41,7 +41,7 @@ class Project
       depends.each do | p |
         f.puts("  dependencies += project(\"../#{p.name}\").compile_cpp")
       end
-      f.puts("  cc(glob(\"*.cpp\"),dependencies)")
+      f.puts("  ar(\"#{name}\",cc(glob(\"*.cpp\"),dependencies))")
       f.puts("end")
     end
   end
@@ -50,8 +50,10 @@ end
 
 projects = []
 
-for i in 0...50
-  projects << Project.new("big","project_#{i}",projects,100)
+count = ARGV[0] ? ARGV[0].to_i : 50
+files = ARGV[1] ? ARGV[1].to_i : 100
+for i in 0...count
+  projects << Project.new("big","project_#{i}",projects,files)
 end
 
 p = projects.last

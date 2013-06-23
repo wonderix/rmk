@@ -1,19 +1,19 @@
 require 'fileutils'
 
-class CppArchive
+class CppFileArchive
   attr_accessor :objects, :includes
   def initialize()
     @objects = []
     @includes = []
   end
   def to_a()
-    return @objects
+    @objects
   end
   def to_s()
-    return @objects.to_s
+    @objects.to_s
   end
   def inspect()
-    return @objects.inspect
+     "CppFileArchive:" + @objects.inspect
   end
   def mtime()
     mtime = Time.at(0)
@@ -23,8 +23,33 @@ class CppArchive
     end
     mtime
   end
+  def value()
+  	@objects
+  end
 end
 
+class CppArArchive
+  attr_accessor :includes
+  def initialize(name)
+    @name = name
+    @includes = []
+  end
+  def to_a()
+    [ @name ]
+  end
+  def to_s()
+    @name
+  end
+  def inspect()
+    "CppArArchive:" + @name.inspect
+  end
+  def mtime()
+  	File.mtime(@name)
+  end
+  def value()
+  	@name
+  end
+end
 
 module Gnu
 
@@ -34,10 +59,10 @@ module Gnu
 
   def cc(files,depends, options = {}) 
     depends = depends.uniq
-    result = CppArchive.new
+    result = CppFileArchive.new
     includes = [] 
     depends.each do | d |
-      includes.concat(d.includes) if d.is_a?(CppArchive)
+      includes.concat(d.includes) if d.respond_to?(:includes)
     end
     includes.uniq!
     futures = []
@@ -63,11 +88,26 @@ module Gnu
     result.objects.concat(futures.map { | f | f.value })
     result.includes.concat(files.map{ | x | "-I" + File.dirname(x)}.uniq)
     result.includes.push("-I" + dir()) if files.empty?
-    result.includes.concat(includes)
+    result.includes.concat(includes).uniq!
     [ result ]
   end
   
-  def ar(name,objects, options = {}) 
+  def ar(name,depends, options = {}) 
+    build_cache(depends) do
+      target_dir = File.join(build_dir,TARGET)
+      FileUtils.mkdir_p(target_dir)
+      lib = CppArArchive.new(File.join(target_dir,name+".a"))
+    	depends.each do | d |
+      	lib.includes.concat(d.includes) if d.respond_to?(:includes)
+    	end
+    	lib.includes.uniq!
+      objects = []
+      depends.each { | d | objects.concat(d.to_a) }
+      cfile = File.join(target_dir,name + ".cmd")
+      File.open(cfile,"w") { | f | f.write(objects.join(" ")) }
+      system("ar -cr  #{lib} #{objects.join(" ")}  ")
+      [ lib ]
+    end.value
   end
   
   def ld(name,depends, options = {}) 
