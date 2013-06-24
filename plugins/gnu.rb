@@ -53,7 +53,7 @@ end
 
 module Gnu
 
-  include BuildTools
+  include Rmk::Tools
   
   TARGET = "i486-linux"
 
@@ -67,7 +67,8 @@ module Gnu
     includes.uniq!
     futures = []
     files.each do | cpp |
-      futures << build_cache([cpp]) do | depends |
+      header = []
+      futures << build_cache([cpp],header) do | depends |
         basename, suffix  = File.basename(cpp).split(".")
         target_dir = File.join(build_dir,TARGET)
         ofile = File.join(target_dir,basename + ".o")

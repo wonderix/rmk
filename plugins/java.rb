@@ -3,7 +3,7 @@ require 'fileutils'
 
 module Java
 
-  include BuildTools
+  include Rmk::Tools
   
   def javac(files,jarfiles, options = {})
     build_cache(files+jarfiles) do
