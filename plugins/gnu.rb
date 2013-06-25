@@ -95,8 +95,13 @@ module Gnu
       ofile = File.join(target_dir,name)
       libs = objects.select{ | o | o[-2,2] == ".a" }
       objects = objects - libs
+      start_group = "-Wl,--start-group"
+      end_group = "-Wl,--end-group"
+      if RUBY_PLATFORM =~ /darwin/
+      	start_group = end_group = ""
+      end
       libflags = libs.map{| a | "-L#{File.dirname(a)} -l#{File.basename(a,".a")[3..-1]}"}.join(" ")
-      system("g++ #{objects.join(" ")} -Wl,--start-group #{libflags} -Wl,--end-group  -o #{ofile} ")
+      system("g++ #{objects.join(" ")} #{start_group} #{libflags} #{end_group}  -o #{ofile} ")
       ofile
     end
     [ result ]

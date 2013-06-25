@@ -4,6 +4,7 @@ require 'digest/md5'
 require 'eventmachine'
 require 'fiber'
 require 'optparse'
+require 'em-http-request'
 
 
 
@@ -99,7 +100,7 @@ module Rmk
 
 
   class Material
-    attr_reader :name, :plan, :depends, :block
+    attr_reader :name, :plan, :depends, :block, :hidden
     attr_accessor :result
     def initialize(name,plan,depends,&block)
       @name = name
@@ -107,6 +108,7 @@ module Rmk
       @depends = depends
       @block = block
       @result = nil
+      @hidden = []
     end
     def inspect()
       "@name=#{@name.inspect} @dir=#{@plan.dir} @depends=#{@depends.inspect}"
@@ -197,8 +199,8 @@ module Rmk
   end
   
   class ModificationTimeBuildPolicy
-    def initialize(why)
-      @why = why
+    def initialize(readonly)
+      @readonly = readonly
     end
     def build(materials)
       result = []
@@ -213,7 +215,8 @@ module Rmk
             depends.each { | d | md5.update(d.to_s); }
             file = File.join(material.plan.build_dir,"cache/#{md5.hexdigest}")
             begin
-              depends += File.open(file +".dep","rb") { | f | Marshal.load(f) } 
+            	material.hidden.concat(File.open(file +".dep","rb") { | f | Marshal.load(f) })
+              depends += material.hidden
             rescue Errno::ENOENT
             end
             rebuild = true
@@ -223,21 +226,21 @@ module Rmk
               depends.each do | d |
                 dmtime = d.respond_to?(:mtime) ? d.mtime : File.mtime(d)
                 if dmtime > mtime
-                  raise "Rebuilding #{Tools.relative(file)}(#{mtime}) because #{Tools.relative(d)}(#{dmtime}) is newer" if @why
+                  raise "Rebuilding #{Tools.relative(file)}(#{mtime}) because #{Tools.relative(d)}(#{dmtime}) is newer" if @readonly
                   rebuild = true 
                   break
                 end
               end
             else
-              raise "Rebuilding #{file}) because it doesn't exist" if @why
+              raise "Rebuilding #{file}) because it doesn't exist" if @readonly
             end
             if rebuild
               result << Future.new(depends) do
                 hidden = []
-                res = material.block.call(depends,hidden)
+                res = material.block.call(depends,material.hidden)
                 FileUtils.mkdir_p(File.dirname(file))
                 File.open(file,"wb") { | f | Marshal.dump(res,f) }
-                File.open(file +".dep","wb") { | f | Marshal.dump(hidden,f) } unless hidden.nil? || hidden.empty?
+                File.open(file +".dep","wb") { | f | Marshal.dump(material.hidden,f) } unless material.hidden.empty?
                 material.result = res
               end
             else
@@ -253,30 +256,103 @@ module Rmk
   end
 
 
+  class CacheBuildPolicy
+  	def initialize(url)
+  		@url = url
+  		@policy = ModificationTimeBuildPolicy.new(false)
+  	end
+  	def self.md5(file)
+  		Digest::MD5.hexdigest(File.open(file,'rb'){ | f | f.read()}.gsub(/\s+/,""))
+  	end
+  	def depends_md5(material,md5)
+			material.depends.each do | d |
+				if d.is_a?(Material)
+					depends_md5(d,md5)
+				else
+					md5[d.to_s] = CacheBuildPolicy.md5(d)
+				end
+  		end
+  	end
+  	def hidden_md5(material,md5)
+			material.depends.each do | d |
+				if d.is_a?(Material)
+					d.hidden.each do | h |
+						md5[h] = CacheBuildPolicy.md5(h)
+					end
+					hidden_md5(d,md5)
+				end
+  		end
+  	end
+    def build(materials)
+      result = []
+      materials.each do | material |
+        if material.is_a?(Material)
+        	if material.result
+          	result << material.result 
+          else
+          	md5 = { material.plan.to_s => CacheBuildPolicy.md5(material.plan.to_s)}
+          	depends_md5(material,md5)
+          	id = Digest::MD5.new
+          	md5.keys.sort.each do | k |
+          		id.update(k)
+          		id.update(md5[k])
+          	end
+          	url = File.join(@url,material.name,id.hexdigest,"index")
+          	f = Fiber.current
+  					http = EventMachine::HttpRequest.new(url).get
+						http.callback { f.resume(http) }
+						http.errback  { f.resume(http) }
+						http = Fiber.yield
+						if http.response_header.status == 200
+						else
+							result = @policy.build([material])
+							hmd5 = {}
+							hidden_md5(material,hmd5)
+          		hmd5.keys.sort.each do | k |
+          			id.update(k)
+          			id.update(md5[k])
+          		end
+          		url = File.join(@url,material.name,id.hexdigest,id.hexdigest) 
+  						http = EventMachine::HttpRequest.new(url).put :body => File.open(result.first,'rb'){ | f | f.read()}
+							http.callback { f.resume(http) }
+							http.errback  { f.resume(http) }
+							http = Fiber.yield
+						end
+          end
+        else
+          result << material
+        end
+      end
+      result
+    end
+  end
+
+
 end
 
-options = {:dir => '.'}
-why = false
-policy = Rmk::ModificationTimeBuildPolicy.new(why)
+dir = '.'
+readonly = false
+policy = Rmk::ModificationTimeBuildPolicy.new(readonly)
 OptionParser.new do |opts|
   opts.banner = "Usage: rmk.rb [options] [target]"
 
-  opts.on("-w", "--why", "Show why rebuilding a target") do |v|
-    why = true
-    policy = Rmk::ModificationTimeBuildPolicy.new(why)
+  opts.on("-C", "--directory [directory]", "Change to directory ") do |v|
+    dir = v
   end
-  opts.on("-w", "--why", "Show why rebuilding a target") do |v|
-    why = true
-    policy = Rmk::ModificationTimeBuildPolicy.new(why)
+  opts.on("-r", "--readonly", "Raise exception when files are rebuild") do |v|
+    policy = Rmk::ModificationTimeBuildPolicy.new(true)
   end
   opts.on("-a", "--always", "build files unconditionally") do |v|
     policy = Rmk::AlwaysBuildPolicy.new()
+  end
+  opts.on("-c", "--cache [url]", "use build cache ") do |v|
+    policy = Rmk::CacheBuildPolicy.new(v)
   end
 end.parse!
 
 result = 0
 build_file_cache = Rmk::PlanCache.new()
-build_file = build_file_cache.load("build.rmk",options[:dir])
+build_file = build_file_cache.load("build.rmk",dir)
 task = ARGV[0] || "all"
 EventMachine.run do
   Fiber.new do 

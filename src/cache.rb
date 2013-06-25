@@ -1,0 +1,29 @@
+require 'sinatra'
+require 'haml'
+require 'fileutils'
+
+
+
+get '/:name/:md5/index' do
+	result = "["
+	seperator = ""
+	dir = File.join('public',params[:name],params[:md5])
+	halt 400 , "File not found" unless File.directory?(dir)
+	Dir.glob(File.join(dir,"*.dep")) do | x |
+  	result += seperator
+  	seperator = ",\n"
+  	result += File.read(x)
+  end
+  result += "]"
+  result
+end
+
+put '/:name/:md5/:file' do
+	file = File.join('public',params[:name],params[:md5],params[:file])
+	FileUtils.mkdir_p(File.dirname(file))
+	File.open(file,"w") do | f |
+		f.write(request.body.read)
+	end
+end
+	
+  
