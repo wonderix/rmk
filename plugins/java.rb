@@ -6,21 +6,25 @@ module Java
   include Rmk::Tools
   
   def javac(files,jarfiles, options = {})
-    build_cache(files+jarfiles) do
+    result = build_cache("classes",files+jarfiles) do | depends |
       classes_dir = File.join(build_dir(),"classes")
       FileUtils.rm_rf(classes_dir)
       FileUtils.mkdir_p(classes_dir)
+      
+      jarfiles = depends.select{ | d | d[-4,4] == ".jar"}
       system("javac -cp #{jarfiles.join(":")} -d #{classes_dir} #{files.join(" ")}")
       Dir.glob(File.join(classes_dir,"**/*.class"))
-    end.value()
+    end
+    [ result ]
   end
   
   def jar(name,classfiles, resourcefiles = [], options= {})
-    lib_dir = File.join(build_dir,"lib");
-    result = File.join(lib_dir,name + ".jar")
-    build_cache(classfiles+resourcefiles) do
+    result = build_cache(name + ".jar",classfiles+resourcefiles) do | depends |
+      lib_dir = File.join(build_dir,"lib");
+      result = File.join(lib_dir,name + ".jar")
       classes_dir = File.join(build_dir(),"classes")
       FileUtils.mkdir_p(lib_dir)
+      classfiles = depends.select{ | d | d[-6,6] == ".class"}
       file = Tempfile.new('jar')
       begin
         classfiles.each do | cls |
@@ -32,7 +36,8 @@ module Java
         # file.unlink
       end
       [ result ]
-    end.value()
+    end
+    [ result ]
   end
   
 end

@@ -6,17 +6,6 @@ require 'fiber'
 require 'optparse'
 
 
-class String
-  def value()
-    self
-  end
-end
-
-class Array
-	def value()
-		self
-	end
-end
 
 class File
   def self.relative_path_from(src,base)
@@ -104,22 +93,36 @@ module Rmk
       message = Tools.relative(cmd)
       puts(message)
       EventMachine.popen(cmd, PipeReader,Fiber.current)
-      raise "Error running xxx" unless Fiber.yield == 0
+      raise "Error running \"#{cmd}\"" unless Fiber.yield == 0
     end
   end
 
+
+  class Material
+    attr_reader :name, :plan, :depends, :block
+    attr_accessor :result
+    def initialize(name,plan,depends,&block)
+      @name = name
+      @plan = plan
+      @depends = depends
+      @block = block
+      @result = nil
+    end
+    def inspect()
+      "@name=#{@name.inspect} @dir=#{@plan.dir} @depends=#{@depends.inspect}"
+    end
+  end
     
   class Plan
 
     BUILD_DIR = "build"
     
     attr_accessor :md5
-    def initialize(build_file_cache,file,md5,policy)
+    def initialize(build_file_cache,file,md5)
       @build_file_cache = build_file_cache
       @file = file
       @dir = File.dirname(file)
       @md5 = md5
-      @policy = policy
     end
     
     def self.file=(value)
@@ -135,8 +138,8 @@ module Rmk
       include const_get(name.capitalize)
     end
     
-    def build_cache(depends,hidden = nil, &block)
-      @policy.build(depends,hidden,build_dir(),@md5,&block)
+    def build_cache(name,depends, &block)
+      return Material.new(name,self,depends,&block)
     end
     
     def glob(pattern)
@@ -162,9 +165,8 @@ module Rmk
   end
 
   class PlanCache
-    def initialize(policy)
+    def initialize()
       @cache = Hash.new
-      @policy = policy
     end
     def load(file, dir = ".")
       file = File.expand_path(File.join(dir,file))
@@ -176,114 +178,116 @@ module Rmk
       content = File.read(file)
       build_file.file = file
       build_file.module_eval(content,file,1)
-      MethodCache.new(build_file.new(self,file,Digest::MD5.hexdigest(content),@policy))
+      MethodCache.new(build_file.new(self,file,Digest::MD5.hexdigest(content)))
     end
   end
   
   class AlwaysBuildPolicy
-    def build(depends,hidden,dir,md5,&block)
-      block.call(hidden)
+    def build(materials)
+      result = []
+      materials.each do | material |
+        if material.is_a?(Material)
+          result << material.result ||= material.block.call(build(material.depends).flatten,[])
+        else
+          result << material
+        end
+      end
+      result
     end
   end
   
   class ModificationTimeBuildPolicy
-    def initialize(policy,why)
-      @policy = policy
+    def initialize(why)
       @why = why
     end
-    def build(depends,hidden,dir,md5plan,&block)
-      md5 = Digest::MD5.new
-      md5.update(md5plan)
-      depends.each { | d | md5.update(d.to_s); }
-      file = File.join(dir,"cache/#{md5.hexdigest}")
-      begin
-        depends += File.open(file +".dep","rb") { | f | Marshal.load(f) } 
-      rescue Errno::ENOENT
-      end
-      rebuild = true
-      if File.readable?(file)
-        rebuild = false
-        mtime = File.mtime(file)
-        depends.each do | d |
-          dmtime = d.respond_to?(:mtime) ? d.mtime : File.mtime(d)
-          if dmtime > mtime
-            raise "Rebuilding #{Tools.relative(file)}(#{mtime}) because #{Tools.relative(d)}(#{dmtime}) is newer" if @why
-            rebuild = true 
-            break
+    def build(materials)
+      result = []
+      materials.each do | material |
+        if material.is_a?(Material)
+          if material.result
+            result << material.result
+          else
+            md5 = Digest::MD5.new
+            md5.update(material.plan.md5)
+            depends = build(material.depends).flatten
+            depends.each { | d | md5.update(d.to_s); }
+            file = File.join(material.plan.build_dir,"cache/#{md5.hexdigest}")
+            begin
+              depends += File.open(file +".dep","rb") { | f | Marshal.load(f) } 
+            rescue Errno::ENOENT
+            end
+            rebuild = true
+            if File.readable?(file)
+              rebuild = false
+              mtime = File.mtime(file)
+              depends.each do | d |
+                dmtime = d.respond_to?(:mtime) ? d.mtime : File.mtime(d)
+                if dmtime > mtime
+                  raise "Rebuilding #{Tools.relative(file)}(#{mtime}) because #{Tools.relative(d)}(#{dmtime}) is newer" if @why
+                  rebuild = true 
+                  break
+                end
+              end
+            else
+              raise "Rebuilding #{file}) because it doesn't exist" if @why
+            end
+            if rebuild
+              result << Future.new(depends) do
+                hidden = []
+                res = material.block.call(depends,hidden)
+                FileUtils.mkdir_p(File.dirname(file))
+                File.open(file,"wb") { | f | Marshal.dump(res,f) }
+                File.open(file +".dep","wb") { | f | Marshal.dump(hidden,f) } unless hidden.nil? || hidden.empty?
+                material.result = res
+              end
+            else
+              result << material.result = File.open(file,"rb") { | f | Marshal.load(f) }
+            end 
           end
+        else
+          result << material
         end
-      else
-        raise "Rebuilding #{file}) because it doesn't exist" if @why
       end
-      if rebuild
-        result = Future.new(depends) do
-          res = @policy.build(depends,hidden,dir,md5plan,&block)
-          FileUtils.mkdir_p(File.dirname(file))
-          File.open(file,"wb") { | f | Marshal.dump(res,f) }
-          File.open(file +".dep","wb") { | f | Marshal.dump(hidden,f) } unless hidden.nil? || hidden.empty?
-          res
-        end
-      else
-        result = File.open(file,"rb") { | f | Marshal.load(f) }
-      end 
-      result
+      result.map{ | r | r.is_a?(Future) ? r.value : r }
     end
   end
 
-  class CacheBuildPolicy
-    def initialize(uri,policy,why)
-      @uri = uri
-      @policy = policy
-      @why = why
-    end
-    def build(depends,hidden,dir,md5plan,&block)
-      md5 = Digest::MD5.new
-      md5.update(md5plan)
-      depends.each do | d | 
-        md5.update(d.respond_to?(:md5) ? d.md5 : File.read(d.to_s));
-      end
-      md5 = md5.hexdigest
-      current = Fiber.current
-      http = EventMachine::HttpRequest.new(File.join(uri,md5)).get()
-      http.callback { current.resume(http) }
-      http.errback { current.resume(http) }
-      http = Fiber.yield
-      if http.response_header.status.to_i != 200
-      end
-    end
-  end
 
 end
 
 options = {:dir => '.'}
 why = false
-policy = Rmk::ModificationTimeBuildPolicy.new(Rmk::AlwaysBuildPolicy.new(),why)
+policy = Rmk::ModificationTimeBuildPolicy.new(why)
 OptionParser.new do |opts|
   opts.banner = "Usage: rmk.rb [options] [target]"
 
   opts.on("-w", "--why", "Show why rebuilding a target") do |v|
     why = true
-    policy = Rmk::ModificationTimeBuildPolicy.new(Rmk::AlwaysBuildPolicy.new(),why)
+    policy = Rmk::ModificationTimeBuildPolicy.new(why)
   end
-  opts.on("-C", "--directory", "change to directory") do |v|
-    options[:dir] = v
+  opts.on("-w", "--why", "Show why rebuilding a target") do |v|
+    why = true
+    policy = Rmk::ModificationTimeBuildPolicy.new(why)
   end
-  opts.on("-c", "--cache", "use compiler cache") do |v|
-    policy = Rmk::ModificationTimeBuildPolicy.new(Rmk::CacheBuildPolicy.new(Rmk::AlwaysBuildPolicy.new()),why)
+  opts.on("-a", "--always", "build files unconditionally") do |v|
+    policy = Rmk::AlwaysBuildPolicy.new()
   end
 end.parse!
 
 result = 0
-build_file_cache = Rmk::PlanCache.new(policy)
+build_file_cache = Rmk::PlanCache.new()
 build_file = build_file_cache.load("build.rmk",options[:dir])
 task = ARGV[0] || "all"
 EventMachine.run do
   Fiber.new do 
     begin
-      build_file.send(task.intern)
+      materials = build_file.send(task.intern)
+      # p materials
+      policy.build(materials)
       puts "Build OK"
     rescue Exception => exc
       STDERR.puts exc.message
+      STDERR.puts exc.backtrace.join("\n")
       puts "Build Failed"
       result = 1
     end

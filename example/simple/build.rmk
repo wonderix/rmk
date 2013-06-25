@@ -1,6 +1,5 @@
 
 
 def all()
-  project("main").compile_cpp()
-  project("main").compile_java()
+  project("main").compile_cpp() + project("main").compile_java()
 end
