@@ -5,6 +5,7 @@ require 'eventmachine'
 require 'fiber'
 require 'optparse'
 require 'em-http-request'
+require 'json'
 
 
 
@@ -119,13 +120,26 @@ module Rmk
     def inspect()
       "@name=#{@name.inspect} @dir=#{@plan.dir} @depends=#{@depends.inspect}"
     end
-    def build(depends)
-      @result = @block.call(depends,@hidden)
-      headers(@hidden)
-      FileUtils.mkdir_p(File.dirname(@file))
+    
+    def result=(value,hdrs=nil)
+    	@result = value
+    	if hdrs
+    		@headers = nil
+    		@hidden.clear
+    		headers.each do | key ,value |
+    			@hidden[key] = true
+    		end
+    	else
+    		headers(@hidden)
+			end
+			FileUtils.mkdir_p(File.dirname(@file))
       File.open(@file,"wb") { | f | Marshal.dump(@result,f) }
       File.open(@file +".dep","wb") { | f | Marshal.dump(@hidden,f) } unless @hidden.empty?
-      @result 
+      @result
+    end
+    
+    def build(depends)
+      self.result = @block.call(depends,@hidden)
     end
     
     def sources(result)
@@ -237,8 +251,11 @@ module Rmk
   end
   
   class ModificationTimeBuildPolicy
-    def initialize(readonly)
+    def initialize(readonly=false)
       @readonly = readonly
+    end
+    def cache(material,&block)
+    	block.call
     end
     def build(materials)
       result = []
@@ -273,9 +290,11 @@ module Rmk
               raise "Rebuilding #{file}) because it doesn't exist" if @readonly
             end
             if rebuild
-              depends = build(material.depends + material.include_depends).flatten
-              result << Future.new(depends) do
-                material.build(depends)
+            	result << cache(material) do
+              	depends = build(material.depends + material.include_depends).flatten
+              	Future.new(depends) do
+                	material.build(depends)
+              	end
               end
             else
               result << material.result = File.open(file,"rb") { | f | Marshal.load(f) }
@@ -290,74 +309,85 @@ module Rmk
   end
 
 
-  class CacheBuildPolicy
+  class CacheBuildPolicy < ModificationTimeBuildPolicy
   	def initialize(url)
   		@url = url
-  		@policy = ModificationTimeBuildPolicy.new(false)
+  		@md5_cache = {}
   	end
-  	def self.md5(file)
-  		Digest::MD5.hexdigest(File.open(file,'rb'){ | f | f.read()}.gsub(/\s+/,""))
-  	end
-  	def depends_md5(material,md5)
-			material.depends.each do | d |
-				if d.is_a?(Material)
-					depends_md5(d,md5)
-				else
-					md5[d.to_s] = CacheBuildPolicy.md5(d)
-				end
+  	def md5(file)
+  		@md5_cache[file] ||= begin
+  		  Digest::MD5.hexdigest(File.open(file,'rb'){ | f | f.read()}.gsub(/\s+/,""))
+  		rescue Errno::ENOENT
+  			"0000"
   		end
   	end
-  	def hidden_md5(material,md5)
-			material.depends.each do | d |
-				if d.is_a?(Material)
-					d.hidden.each do | h |
-						md5[h] = CacheBuildPolicy.md5(h)
-					end
-					hidden_md5(d,md5)
-				end
-  		end
+  	def put(path,body)
+			f = Fiber.current
+			http = EventMachine::HttpRequest.new(File.join(@url,path)).put :body => body
+			http.callback { f.resume(http) }
+			http.errback  { f.resume(http) }
+			http = Fiber.yield
   	end
-    def build(materials)
-      result = []
-      materials.each do | material |
-        if material.is_a?(Material)
-        	if material.result
-          	result << material.result 
-          else
-          	md5 = { material.plan.to_s => CacheBuildPolicy.md5(material.plan.to_s)}
-          	depends_md5(material,md5)
-          	id = Digest::MD5.new
-          	md5.keys.sort.each do | k |
-          		id.update(k)
-          		id.update(md5[k])
-          	end
-          	url = File.join(@url,material.name,id.hexdigest,"index")
-          	f = Fiber.current
-  					http = EventMachine::HttpRequest.new(url).get
-						http.callback { f.resume(http) }
-						http.errback  { f.resume(http) }
-						http = Fiber.yield
-						if http.response_header.status == 200
-						else
-							result = @policy.build([material])
-							hmd5 = {}
-							hidden_md5(material,hmd5)
-          		hmd5.keys.sort.each do | k |
-          			id.update(k)
-          			id.update(md5[k])
-          		end
-          		url = File.join(@url,material.name,id.hexdigest,id.hexdigest) 
-  						http = EventMachine::HttpRequest.new(url).put :body => File.open(result.first,'rb'){ | f | f.read()}
-							http.callback { f.resume(http) }
-							http.errback  { f.resume(http) }
-							http = Fiber.yield
+  	def get(path)
+      f = Fiber.current
+			http = EventMachine::HttpRequest.new(File.join(@url,path)).get
+			http.callback { f.resume(http) }
+			http.errback  { f.resume(http) }
+			http = Fiber.yield
+			code = http.response_header.status
+			raise code.to_s unless code == 200
+			http.response
+  	end
+    def cache(material,&block)
+			sources = { material.plan.to_s => true}
+			material.sources(sources)
+			id = Digest::MD5.new
+			sources.keys.sort.each do | k |
+				id.update(k)
+				id.update(md5(k))
+			end
+			id = id.hexdigest
+			result = nil
+			begin
+				JSON.parse(get(File.join(material.name,id,"index"))).each do | entries |
+					entries.each do | hid , headers |
+						found = true
+						headers.each do | file , x |
+							found &&= ( md5(file) == x )
 						end
-          end
-        else
-          result << material
-        end
-      end
-      result
+						if found
+							result = JSON.parse(get(File.join(material.name,id,hid+".json")))['result']
+							FileUtils.mkdir_p(File.dirname(result))
+							File.open(result,'wb') { | f | f.write(get(File.join(material.name,id,hid+".bin"))) }
+							puts("GET #{result}")
+							material.result= result,headers
+							break
+						end
+					end
+				end
+			rescue Exception => exc
+				p exc
+			end
+			unless result
+				result = block.call()
+				result = result.value if result.is_a?(Future)
+				headers = {}
+				material.headers(headers)
+				hid = Digest::MD5.new
+				headers.keys.sort.each do | k |
+					hid.update(k)
+					x = md5(k)
+					headers[k] = x
+					hid.update(x)
+				end
+				hid = hid.hexdigest
+				if result.is_a?(String)
+					put(File.join(material.name,id,hid+".json"),{ 'result' => result}.to_json)
+					put(File.join(material.name,id,hid+".bin"),File.open(result,'rb'){ | f | f.read()})
+					put(File.join(material.name,id,hid+".dep"),{ hid => headers}.to_json)
+				end
+			end
+			result 
     end
   end
 
@@ -365,8 +395,7 @@ module Rmk
 end
 
 dir = '.'
-readonly = false
-policy = Rmk::ModificationTimeBuildPolicy.new(readonly)
+policy = Rmk::ModificationTimeBuildPolicy.new()
 OptionParser.new do |opts|
   opts.banner = "Usage: rmk.rb [options] [target]"
 
