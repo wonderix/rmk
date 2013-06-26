@@ -100,18 +100,56 @@ module Rmk
 
 
   class Material
-    attr_reader :name, :plan, :depends, :block, :hidden
+    attr_reader :name, :plan, :depends, :block, :hidden, :include_depends, :file
     attr_accessor :result
-    def initialize(name,plan,depends,&block)
+    def initialize(name,plan,depends,include_depends,&block)
       @name = name
       @plan = plan
       @depends = depends
+      @include_depends = include_depends
       @block = block
       @result = nil
-      @hidden = []
+      @hidden = {}
+      md5 = Digest::MD5.new
+      md5.update(plan.md5)
+      sources({})
+      @sources.keys.each { | s | md5.update(s); }
+      @file = File.join(plan.build_dir,"cache/#{@name}/#{md5.hexdigest}")
     end
     def inspect()
       "@name=#{@name.inspect} @dir=#{@plan.dir} @depends=#{@depends.inspect}"
+    end
+    def build(depends)
+      @result = @block.call(depends,@hidden)
+      headers(@hidden)
+      FileUtils.mkdir_p(File.dirname(@file))
+      File.open(@file,"wb") { | f | Marshal.dump(@result,f) }
+      File.open(@file +".dep","wb") { | f | Marshal.dump(@hidden,f) } unless @hidden.empty?
+      @result 
+    end
+    
+    def sources(result)
+      unless @sources
+        @sources  = {}
+        @depends.each do | d |
+          if d.is_a?(Material)
+            d.sources(@sources)
+          else
+            @sources[d.to_s] = true
+          end
+        end
+      end
+      result.merge!(@sources)
+    end
+    def headers(result,depth = 0)
+      unless @headers
+        @headers  = @hidden.clone
+        @depends.each do | d |
+          d.headers(@headers, depth +1) if d.is_a?(Material)
+        end
+      end
+      # puts "#{"  " * depth}#{@name} #{__LINE__} #{@headers.inspect}"
+      result.merge!(@headers)
     end
   end
     
@@ -140,8 +178,8 @@ module Rmk
       include const_get(name.capitalize)
     end
     
-    def build_cache(name,depends, &block)
-      return Material.new(name,self,depends,&block)
+    def build_cache(name,depends, include_depends = [], &block)
+      return Material.new(name,self,depends,include_depends,&block)
     end
     
     def glob(pattern)
@@ -209,22 +247,22 @@ module Rmk
           if material.result
             result << material.result
           else
-            md5 = Digest::MD5.new
-            md5.update(material.plan.md5)
-            depends = build(material.depends).flatten
-            depends.each { | d | md5.update(d.to_s); }
-            file = File.join(material.plan.build_dir,"cache/#{md5.hexdigest}")
+            file = material.file
+            sources = {}
+            material.sources(sources)
             begin
-            	material.hidden.concat(File.open(file +".dep","rb") { | f | Marshal.load(f) })
-              depends += material.hidden
+            	material.hidden.merge!(File.open(file +".dep","rb") { | f | Marshal.load(f) })
+              sources.merge!(material.hidden)
             rescue Errno::ENOENT
+            rescue Exception
+              File.delete(file) if File.readable?(file)
             end
             rebuild = true
             if File.readable?(file)
               rebuild = false
               mtime = File.mtime(file)
-              depends.each do | d |
-                dmtime = d.respond_to?(:mtime) ? d.mtime : File.mtime(d)
+              sources.keys.each do | d |
+                dmtime = File.mtime(d)
                 if dmtime > mtime
                   raise "Rebuilding #{Tools.relative(file)}(#{mtime}) because #{Tools.relative(d)}(#{dmtime}) is newer" if @readonly
                   rebuild = true 
@@ -235,13 +273,9 @@ module Rmk
               raise "Rebuilding #{file}) because it doesn't exist" if @readonly
             end
             if rebuild
+              depends = build(material.depends + material.include_depends).flatten
               result << Future.new(depends) do
-                hidden = []
-                res = material.block.call(depends,material.hidden)
-                FileUtils.mkdir_p(File.dirname(file))
-                File.open(file,"wb") { | f | Marshal.dump(res,f) }
-                File.open(file +".dep","wb") { | f | Marshal.dump(material.hidden,f) } unless material.hidden.empty?
-                material.result = res
+                material.build(depends)
               end
             else
               result << material.result = File.open(file,"rb") { | f | Marshal.load(f) }

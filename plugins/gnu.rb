@@ -43,7 +43,7 @@ module Gnu
     files.each do | cpp |
       header = []
       basename, suffix  = File.basename(cpp).split(".")
-      result << build_cache(basename + ".o",[cpp]+depends) do | depends, hidden |
+      result << build_cache(basename + ".o",[cpp],depends) do | depends, hidden |
         includes = [] 
         depends.each do | d |
           includes.concat(d.includes) if d.respond_to?(:includes)
@@ -61,7 +61,7 @@ module Gnu
         content.gsub!(/\\$/,"")
         content = content.split()
         content.shift()
-        hidden.concat(content)
+        content.each{ | h | hidden[h] = true }
         result = Cpp::ObjectFile.new(ofile)
         result.includes.concat(local_includes)
         result.includes.concat(includes).uniq!
