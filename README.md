@@ -92,3 +92,45 @@ Start cache server
 Run build
 
     rmk.rb -c http://localhost:4567
+    
+## Writing plugins
+
+* Put a new file in the plugin directory. The filename should be lower case
+* Put a module in this file. The name of the module must match the capitalized filename
+* Require your plugin in your build.rmk
+* All methods from your plugin are available in your build file
+
+    # file abc.rb
+    module Abc
+      def hello()
+        puts "Hello"
+      end
+    end
+
+## Writing work items
+
+* Every build step must be encapsulated in a work item
+* All dependency checks are based on work items
+* All dependencies must be passed as argument to work_item
+* The filenames of the build results of all dependencies are passed as block argument
+
+    # This method extracts the first 1000 bytes from a given file
+    def head(other_work_items)
+      # create new work item and pass all dependencies
+      # when this item needs to be rebuild the given block is called and all 
+      # build results of other_work_items are passed as argument to the block
+      work_item(other_work_items) do | other_files |
+        result = []
+        # iterate of all files
+        other_files.each do | file |
+           res = other_files + ".res"
+           File.open(res,'wb') { | o | File.open(file,'rb') { | i | i.read(1000) } }
+           result << res
+        end
+        # return result from block
+        result
+      end
+    end
+       
+       
+     

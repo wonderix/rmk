@@ -43,7 +43,7 @@ module Gnu
     files.each do | cpp |
       header = []
       basename, suffix  = File.basename(cpp).split(".")
-      result << build_cache(basename + ".o",[cpp],depends) do | depends, hidden |
+      result << work_item(basename + ".o",[cpp],depends) do | depends, hidden |
         includes = [] 
         depends.each do | d |
           includes.concat(d.includes) if d.respond_to?(:includes)
@@ -72,7 +72,7 @@ module Gnu
   end
   
   def ar(name,depends, options = {}) 
-    result = build_cache("lib" + name + ".a",depends) do | objects |
+    result = work_item("lib" + name + ".a",depends) do | objects |
       target_dir = File.join(build_dir,TARGET)
       FileUtils.mkdir_p(target_dir)
       lib = Cpp::Archive.new(File.join(target_dir, "lib" + name+".a"))
@@ -90,7 +90,7 @@ module Gnu
   end
   
   def ld(name,depends, options = {}) 
-    result = build_cache(name,depends) do | objects |
+    result = work_item(name,depends) do | objects |
       target_dir = File.join(build_dir,TARGET)
       FileUtils.mkdir_p(target_dir)
       ofile = File.join(target_dir,name)
