@@ -100,6 +100,7 @@ Run build
 * Require your plugin in your build.rmk
 * All methods from your plugin are available in your build file
 
+    rmk.rb -c http://localhost:4567
     \# file abc.rb
     module Abc
       def hello()
