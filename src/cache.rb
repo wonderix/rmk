@@ -1,5 +1,6 @@
+#!/usr/bin/env ruby
+
 require 'sinatra'
-require 'haml'
 require 'fileutils'
 
 

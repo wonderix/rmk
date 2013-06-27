@@ -5,12 +5,27 @@ rmk is a software construction tool with a mix of features of make, rake maven, 
 
 ## Features
 
-* Support for java projects
+* Build scripts are written in Ruby
+* Support for Java projects
 * Support for C++ projects
-* Support for maven dependencies
-* Project dependencies
 * Automatic dependency management for C and C++
+* Support for maven dependencies
+* Advanced project dependencies using normal Ruby method calls
+* Support for parallel builds
+* Extremly fast (Delta build with 10000 files without changes in less than 1 second)
+* Share built files in a cache
+* Cross-platform builds on Linux, Mac OS X and Windows
 
+
+## Installation
+
+* Install needed gem files
+
+    sudo gem install eventmachine em-http-request json sinatra
+
+* Download repository
+
+    git clone https://github.com/wonderix/rmk.git
 
 ## C++ Example
 
@@ -60,3 +75,20 @@ You can refer to build results from other directories by loading the project and
       # compile all files in src/main/java/**/*.java. Use result from directory ../lib as additional library
       javac(glob("src/main/java/**/*.java"),project("../lib").compile_java)
     end
+
+
+## Caching
+
+Start cache server
+
+    cache.rb &
+    
+    == Sinatra/1.4.3 has taken the stage on 4567 for development with backup from Thin
+    >> Thin web server (v1.5.1 codename Straight Razor)
+    >> Maximum connections set to 1024
+    >> Listening on localhost:4567, CTRL+C to stop
+
+        
+Run build
+
+   rmk.rb -c http://localhost:4567
