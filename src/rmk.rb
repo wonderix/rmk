@@ -121,12 +121,12 @@ module Rmk
       "@name=#{@name.inspect} @dir=#{@plan.dir} @depends=#{@depends.inspect}"
     end
     
-    def result=(value,hdrs=nil)
+    def set_result(value,hdrs=nil)
     	@result = value
     	if hdrs
     		@headers = nil
     		@hidden.clear
-    		headers.each do | key ,value |
+    		hdrs.each do | key ,value |
     			@hidden[key] = true
     		end
     	else
@@ -139,7 +139,7 @@ module Rmk
     end
     
     def build(depends)
-      self.result = @block.call(depends,@hidden)
+      self.set_result(@block.call(depends,@hidden),nil)
     end
     
     def sources(result)
@@ -308,7 +308,6 @@ module Rmk
     end
   end
 
-
   class CacheBuildPolicy < ModificationTimeBuildPolicy
   	def initialize(url)
   		@url = url
@@ -335,7 +334,7 @@ module Rmk
 			http.errback  { f.resume(http) }
 			http = Fiber.yield
 			code = http.response_header.status
-			raise code.to_s unless code == 200
+			raise Errno::ENOENT.new("File '#{path}' not found: #{code}") unless code == 200
 			http.response
   	end
     def cache(material,&block)
@@ -360,13 +359,15 @@ module Rmk
 							FileUtils.mkdir_p(File.dirname(result))
 							File.open(result,'wb') { | f | f.write(get(File.join(material.name,id,hid+".bin"))) }
 							puts("GET #{result}")
-							material.result= result,headers
+							material.set_result(result,headers)
 							break
 						end
 					end
 				end
+      rescue Errno::ENOENT
 			rescue Exception => exc
-				p exc
+        STDERR.puts exc.message
+        STDERR.puts exc.backtrace.join("\n")
 			end
 			unless result
 				result = block.call()

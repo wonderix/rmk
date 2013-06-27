@@ -82,6 +82,7 @@ module Gnu
     	lib.includes.uniq!
       cfile = File.join(target_dir,name + ".cmd")
       File.open(cfile,"w") { | f | f.write(objects.join(" ")) }
+      FileUtils.rm_f(lib)
       system("ar -cr  #{lib} #{objects.join(" ")}  ")
       lib
     end
