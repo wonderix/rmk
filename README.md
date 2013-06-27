@@ -91,4 +91,4 @@ Start cache server
         
 Run build
 
-   rmk.rb -c http://localhost:4567
+    rmk.rb -c http://localhost:4567
