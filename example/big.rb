@@ -44,6 +44,10 @@ class Project
       f.puts("  ar(\"#{name}\",cc(glob(\"*.cpp\"),dependencies))")
       f.puts("end")
     end
+    File.open("#{@dir}/SConstruct","w") do | f |
+      f.puts("Decider('timestamp-newer')")
+      f.puts("Library('foo',Glob('*.cpp'), CCFLAGS='-I. -I#{@name} #{depends.map{ | p | "-I" + p.name}.join(" ")}') ")
+    end
   end
 end
 
@@ -75,3 +79,6 @@ File.open("big/build.rmk","w") do | f |
   f.puts("end")
 end
 
+File.open("big/SConstruct","w") do | f |
+  f.puts("SConscript([#{projects.map{ | p | "'" + p.name + "/SConstruct'"}.join(", ")}]) ")
+end

@@ -42,10 +42,11 @@ module Gnu
     local_includes = files.empty? ? [ "-I#{dir}" ]  : files.map{ | x | "-I" + File.dirname(x)}.uniq
     files.each do | cpp |
       header = []
-      basename, suffix  = File.basename(cpp).split(".")
-      result << work_item(basename + ".o",[cpp],depends) do | depends, hidden |
+      basename, suffix  = File.basename(cpp.to_s).split(".")
+      result << work_item(basename + ".o",[cpp],depends) do | hidden |
         includes = [] 
         depends.each do | d |
+          d = d.result
           includes.concat(d.includes) if d.respond_to?(:includes)
         end
         includes.uniq!
@@ -53,7 +54,7 @@ module Gnu
         ofile = File.join(target_dir,basename + ".o")
         dfile = File.join(target_dir,basename + ".d")
         FileUtils.mkdir_p(target_dir)
-        system("gcc -x c++ #{options[:flags].to_s} -I#{dir} -o #{ofile} #{includes.join(" ")} -MD -c #{cpp}")
+        system("gcc -x c++ #{options[:flags].to_s} -I#{dir} -o #{ofile} #{includes.join(" ")} -MD -c #{cpp.result}")
         content = File.read(dfile)
         File.delete(dfile)
         content.gsub!(/\b[A-Z]:\//i,"/")
@@ -72,10 +73,11 @@ module Gnu
   end
   
   def ar(name,depends, options = {}) 
-    result = work_item("lib" + name + ".a",depends) do | objects |
+    result = work_item("lib" + name + ".a",depends) do
       target_dir = File.join(build_dir,TARGET)
       FileUtils.mkdir_p(target_dir)
       lib = Cpp::Archive.new(File.join(target_dir, "lib" + name+".a"))
+      objects = depends.map{ | x | x.result }
     	objects.each do | d |
       	lib.includes.concat(d.includes) if d.respond_to?(:includes)
     	end
@@ -90,10 +92,11 @@ module Gnu
   end
   
   def ld(name,depends, options = {}) 
-    result = work_item(name,depends) do | objects |
+    result = work_item(name,depends) do 
       target_dir = File.join(build_dir,TARGET)
       FileUtils.mkdir_p(target_dir)
       ofile = File.join(target_dir,name)
+      objects = depends.map{ | x | x.result }
       libs = objects.select{ | o | o[-2,2] == ".a" }
       objects = objects - libs
       start_group = "-Wl,--start-group"

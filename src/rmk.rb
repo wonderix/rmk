@@ -27,6 +27,18 @@ class File
   end
 end
 
+class String
+  def result()
+    self
+  end
+end
+
+class Array
+  def result()
+    self
+  end
+end
+
 module Rmk
   class MethodCache
     def initialize(delegate)
@@ -61,13 +73,13 @@ module Rmk
   class Future
     def initialize(name,&block)
       @name = name
-      @value = nil
+      @result = nil
       current = Fiber.current
       Fiber.new do 
         begin
-          @value = block.call() || true
+          @result = block.call() || true
         rescue Exception => exc
-          @value = exc
+          @result = exc
         end
         EventMachine.next_tick do
           current.resume if current.alive?
@@ -77,12 +89,12 @@ module Rmk
     def to_s()
       "Future:#{@name}"
     end
-    def value()
-      while @value.nil? 
+    def result()
+      while @result.nil? 
         Fiber.yield
       end
-      raise @value if @value.is_a?(Exception)
-      @value
+      raise @result if @result.is_a?(Exception)
+      @result
     end
   end
 
@@ -101,11 +113,7 @@ module Rmk
 
 
   class WorkItem
-    attr_reader :name, :plan, :depends, :block, :include_depends, :file
-    attr_accessor :result
-    NEVER_DONE = 0
-    LATELY_DONE = 1
-    DONE = 2
+    attr_reader :name, :plan, :depends, :block, :include_depends, :file, :last_result
     def initialize(name,plan,depends,include_depends,&block)
       @name = name
       @plan = plan
@@ -113,14 +121,12 @@ module Rmk
       @include_depends = include_depends
       @block = block
       @result = nil
-      @state = NEVER_DONE
       md5 = Digest::MD5.new
       md5.update(plan.md5)
       sources.each { | s | md5.update(s); }
       @file = File.join(plan.build_dir,"cache/#{@name}/#{md5.hexdigest}")
 			begin
-        @result = File.open(@file,"rb") { | f | Marshal.load(f) }
-        @state = LATELY_DONE
+        @last_result = File.open(@file,"rb") { | f | Marshal.load(f) }
 				@headers = File.open(@file +".dep","rb") { | f | Marshal.load(f) }
 			rescue Errno::ENOENT
 			rescue Exception
@@ -128,16 +134,8 @@ module Rmk
 			end
     end
     
-    def done?()
-    	@state == DONE
-    end
-
-    def done!()
-    	@state = DONE
-    end
-    
-    def lately_done?()
-    	@state >= LATELY_DONE
+    def use_last_result()
+    	@result = @last_result
     end
     
     def inspect()
@@ -148,26 +146,33 @@ module Rmk
     	File.mtime(@file)
     end
     
-    def set_result(value,hdrs=nil)
-    	@result = value
-    	@state = DONE
-    	if hdrs
-    		@headers.clear
-    		hdrs.each do | key ,value |
-    			@headers[key] = true
-    		end
-			else
-				headers()
-			end
+    def import(result,headers)
+      @result = result
+      @headers = {}
+      headers.each do | key ,value |
+        @headers[key] = true
+      end
+      save(@result)
+    end
+    
+    def save(result)
 			FileUtils.mkdir_p(File.dirname(@file))
-      File.open(@file,"wb") { | f | Marshal.dump(@result,f) }
+      File.open(@file,"wb") { | f | Marshal.dump(result,f) }
       File.open(@file +".dep","wb") { | f | Marshal.dump(@headers,f) } unless @headers.empty?
+      result
+    end
+    
+    def result()
+      @result = @result.result if @result.is_a?(Future)
       @result
     end
     
-    def build(depends)
-    	@headers ||= {}
-      self.set_result(@block.call(depends,@headers),nil)
+    def build()
+      @result = Future.new(@name) do
+        headers()
+        result = @block.call(@headers)
+        save(result)
+      end
     end
     
     def sources(result = nil)
@@ -192,6 +197,9 @@ module Rmk
         end
       end
       result ? result.merge!(@headers)  : @headers.keys
+    end
+    def to_s()
+      @name
     end
   end
     
@@ -286,14 +294,11 @@ module Rmk
     	block.call
     end
     def build(work_items)
-      result = []
       work_items.each do | work_item |
         if work_item.is_a?(WorkItem)
-          if work_item.done?
-            result << work_item.result
-          else
+          unless work_item.result
             rebuild = true
-            if work_item.lately_done?
+            if work_item.last_result
               rebuild = false
               mtime = work_item.mtime
               (work_item.sources + work_item.headers).each do | d |
@@ -308,22 +313,17 @@ module Rmk
               raise "Rebuilding #{work_item.name}) because it doesn't exist" if @readonly
             end
             if rebuild
-            	result << cache(work_item) do
-              	depends = build(work_item.depends + work_item.include_depends).flatten
-              	Future.new(depends) do
-                	work_item.build(depends)
-              	end
+            	cache(work_item) do
+              	build(work_item.depends + work_item.include_depends)
+               	work_item.build()
               end
             else
-            	work_item.done!
-              result << work_item.result
+            	work_item.use_last_result
             end 
           end
-        else
-          result << work_item
         end
       end
-      result.map{ | r | r.is_a?(Future) ? r.value : r }
+      work_items.each { | w |  w.result }
     end
   end
 
@@ -379,7 +379,7 @@ module Rmk
 							FileUtils.mkdir_p(File.dirname(result))
 							File.open(result,'wb') { | f | f.write(get(File.join(work_item.name,id,hid+".bin"))) }
 							puts("GET #{result}")
-							work_item.set_result(result,headers)
+							work_item.import(result,headers)
 							break
 						end
 					end
@@ -389,9 +389,8 @@ module Rmk
         STDERR.puts exc.message
         STDERR.puts exc.backtrace.join("\n")
 			end
-			unless result
-				result = block.call()
-				result = result.value if result.is_a?(Future)
+			unless work_item.result
+				block.call()
 				headers = {}
 				hid = Digest::MD5.new
 				work_item.headers.sort.each do | k |
@@ -401,13 +400,12 @@ module Rmk
 					hid.update(x)
 				end
 				hid = hid.hexdigest
-				if result.is_a?(String)
-					put(File.join(work_item.name,id,hid+".json"),{ 'result' => result}.to_json)
-					put(File.join(work_item.name,id,hid+".bin"),File.open(result,'rb'){ | f | f.read()})
+				if work_item.result.is_a?(String)
+					put(File.join(work_item.name,id,hid+".json"),{ 'result' => work_item.result}.to_json)
+					put(File.join(work_item.name,id,hid+".bin"),File.open(work_item.result,'rb'){ | f | f.read()})
 					put(File.join(work_item.name,id,hid+".dep"),{ hid => headers}.to_json)
 				end
 			end
-			result 
     end
   end
 
@@ -441,7 +439,6 @@ EventMachine.run do
   Fiber.new do 
     begin
       work_items = build_file.send(task.intern)
-      # p work_items
       policy.build(work_items)
       puts "Build OK"
     rescue Exception => exc
