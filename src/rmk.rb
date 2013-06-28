@@ -113,7 +113,7 @@ module Rmk
 
 
   class WorkItem
-    attr_reader :name, :plan, :depends, :block, :include_depends, :file, :last_result
+    attr_reader :name, :plan, :depends, :block, :include_depends, :file
     def initialize(name,plan,depends,include_depends,&block)
       @name = name
       @plan = plan
@@ -125,13 +125,19 @@ module Rmk
       md5.update(plan.md5)
       sources.each { | s | md5.update(s); }
       @file = File.join(plan.build_dir,"cache/#{@name}/#{md5.hexdigest}")
-			begin
-        @last_result = File.open(@file,"rb") { | f | Marshal.load(f) }
-				@headers = File.open(@file +".dep","rb") { | f | Marshal.load(f) }
-			rescue Errno::ENOENT
-			rescue Exception
-				File.delete(@file) if File.readable?(@file)
-			end
+    end
+    
+    def last_result()
+      unless @last_result
+        begin
+          @last_result = File.open(@file,"rb") { | f | Marshal.load(f) }
+          @headers = File.open(@file +".dep","rb") { | f | Marshal.load(f) }
+        rescue Errno::ENOENT
+        rescue Exception
+          File.delete(@file) if File.readable?(@file)
+        end
+      end
+      @last_result
     end
     
     def use_last_result()
