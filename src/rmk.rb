@@ -59,13 +59,15 @@ module Rmk
   end
 
   module PipeReader
-    def initialize(fiber)
+    def initialize(fiber,out)
       @fiber = fiber
+      @out = out
     end
     def receive_data(data)
-      STDOUT.write(data)
+      @out.write(data)
     end
     def unbind
+      @out.close if @out != STDOUT
       @fiber.resume get_status.exitstatus
     end
   end
@@ -106,7 +108,12 @@ module Rmk
     def system(cmd)
       message = Tools.relative(cmd)
       puts(message)
-      EventMachine.popen(cmd, PipeReader,Fiber.current)
+      out = STDOUT
+      if cmd =~ /(.*)\s*>\s*(\S*)$/
+        out = File.open($2,'wb')
+        cmd = $1
+      end
+      EventMachine.popen(cmd, PipeReader,Fiber.current,out)
       raise "Error running \"#{cmd}\"" unless Fiber.yield == 0
     end
   end
@@ -206,6 +213,9 @@ module Rmk
     end
     def to_s()
       @name
+    end
+    def to_a()
+      [ self ]
     end
   end
     

@@ -24,7 +24,7 @@ module Java
       result = File.join(lib_dir,name + ".jar")
       classes_dir = File.join(build_dir(),"classes")
       FileUtils.mkdir_p(lib_dir)
-      classfiles = classfiles.map{ | j | j.result}
+      classfiles = classfiles.map{ | j | j.result}.flatten
       file = Tempfile.new('jar')
       begin
         classfiles.each do | cls |

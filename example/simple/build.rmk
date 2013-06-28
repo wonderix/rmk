@@ -1,5 +1,23 @@
 
+#include support for system command
+include Tools
+
+def strings(work_items)
+  # create new work item and pass all dependencies
+  # when this item needs to be rebuild the given block is called 
+  work_item("strings",work_items) do 
+    result = []
+    # iterate of all items
+    work_items.each do | item |
+      txt = item.result + ".txt"
+      system("strings #{item.result} > #{txt}")
+      result << txt
+    end
+    # return result from block
+    result
+  end.to_a
+end
 
 def all()
-  project("main").compile_cpp() # + project("main").compile_java()
+  strings(project("main").compile_cpp()) + project("main").compile_java()
 end

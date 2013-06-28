@@ -115,24 +115,27 @@ The following script shows a simple example
 * All dependency checks are based on work items
 * All dependencies must be passed as argument to work_item
 
-The following method extracts the first 1000 bytes from a given file
+The following method extracts all strings from a given file
 
-    def head(work_items)
+    #include support for system command
+    include Tools
+
+    def strings(work_items)
       # create new work item and pass all dependencies
       # when this item needs to be rebuild the given block is called 
-      work_item(work_items) do 
+      work_item("strings",work_items) do 
         result = []
         # iterate of all items
         work_items.each do | item |
-           # Get result of work_item
-           res = item.result + ".res"
-           File.open(res,'wb') { | o | File.open(file,'rb') { | i | i.read(1000) } }
-           result << res
+          txt = item.result + ".txt"
+          system("strings #{item.result} > #{txt}")
+          result << txt
         end
         # return result from block
         result
-      end
+      end.to_a
     end
-       
+
+Normally this kind of methods should be part of a plugin. You can also put this code in your build.rmk.
        
      
