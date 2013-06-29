@@ -19,13 +19,8 @@ rmk is a software construction tool with a mix of features of make, rake maven, 
 
 ## Installation
 
-* Install needed gem files
+    sudo gem install rmk
 
-    sudo gem install eventmachine em-http-request json sinatra
-
-* Download repository
-
-    git clone https://github.com/wonderix/rmk.git
 
 ## C++ Example
 
@@ -38,7 +33,7 @@ rmk is a software construction tool with a mix of features of make, rake maven, 
 
 You can run this build script with
 
-    rkm.rb compile_cpp
+    rmk compile_cpp
 
 ## Java Example
 
@@ -51,7 +46,7 @@ You can run this build script with
 
 You can run this build script with
 
-    rkm.rb compile_java
+    rmk compile_java
 
 ## Maven support
 
@@ -81,7 +76,7 @@ You can refer to build results from other directories by loading the project and
 
 Start cache server
 
-    cache.rb &
+    rmksrv &
     
     == Sinatra/1.4.3 has taken the stage on 4567 for development with backup from Thin
     >> Thin web server (v1.5.1 codename Straight Razor)
@@ -91,7 +86,7 @@ Start cache server
         
 Run build
 
-    rmk.rb -c http://localhost:4567
+    rmk -c http://localhost:4567
     
 ## Writing plugins
 

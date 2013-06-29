@@ -1,0 +1,42 @@
+#!/usr/bin/env ruby
+require 'rmk'
+
+dir = '.'
+policy = Rmk::ModificationTimeBuildPolicy.new()
+OptionParser.new do |opts|
+  opts.banner = "Usage: rmk.rb [options] [target]"
+
+  opts.on("-C", "--directory [directory]", "Change to directory ") do |v|
+    dir = v
+  end
+  opts.on("-r", "--readonly", "Raise exception when files are rebuild") do |v|
+    policy = Rmk::ModificationTimeBuildPolicy.new(true)
+  end
+  opts.on("-a", "--always", "build files unconditionally") do |v|
+    policy = Rmk::AlwaysBuildPolicy.new()
+  end
+  opts.on("-c", "--cache [url]", "use build cache ") do |v|
+    policy = Rmk::CacheBuildPolicy.new(v)
+  end
+end.parse!
+
+result = 0
+build_file_cache = Rmk::PlanCache.new()
+build_file = build_file_cache.load("build.rmk",dir)
+task = ARGV[0] || "all"
+EventMachine.run do
+  Fiber.new do 
+    begin
+      work_items = build_file.send(task.intern)
+      policy.build(work_items)
+      puts "Build OK"
+    rescue Exception => exc
+      STDERR.puts exc.message
+      STDERR.puts exc.backtrace.join("\n")
+      puts "Build Failed"
+      result = 1
+    end
+    EventMachine.stop
+  end.resume
+end
+exit(result)
