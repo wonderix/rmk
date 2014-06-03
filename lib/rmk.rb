@@ -109,6 +109,7 @@ module Rmk
 
 
   module Tools
+  
     def self.relative(msg)
       msg.to_s.gsub(/(\/[^\s:]*\/)/) { File.relative_path_from($1,Dir.getwd) + "/" }
     end		
@@ -127,6 +128,15 @@ module Rmk
 
 
   class WorkItem
+
+    def self.jobs=(value)
+      @jobs = value
+    end
+    
+    def self.jobs()
+      @jobs || 100
+    end
+    
     attr_reader :name, :plan, :depends, :block, :include_depends, :file
     def initialize(name,plan,depends,include_depends,&block)
       @name = name
@@ -193,6 +203,8 @@ module Rmk
         result = @block.call(@headers)
         save(result)
       end
+      @result.result if WorkItem.jobs == 1
+      @result
     end
     
     def sources(result = nil)
@@ -250,7 +262,11 @@ module Rmk
       Kernel.require File.join(File.expand_path(File.dirname(File.dirname(__FILE__))),"plugins",name + ".rb")
       include const_get(name.capitalize)
     end
-    
+
+    def self.load(name)
+      PlanCache.current.module_eval(File.read(File.join(@dir,name)))
+    end
+   
     def work_item(name,depends, include_depends = [], &block)
       return WorkItem.new(name,self,depends,include_depends,&block)
     end
@@ -278,6 +294,7 @@ module Rmk
   end
 
   class PlanCache
+    @@build_file = nil
     def initialize()
       @cache = Hash.new
     end
@@ -287,11 +304,14 @@ module Rmk
       @cache[file] ||= load_inner(file)
     end
     def load_inner(file)
-      build_file = Class.new(Plan)
+      @@build_file = Class.new(Plan)
       content = File.read(file)
-      build_file.file = file
-      build_file.module_eval(content,file,1)
-      MethodCache.new(build_file.new(self,file,Digest::MD5.hexdigest(content)))
+      @@build_file.file = file
+      @@build_file.module_eval(content,file,1)
+      MethodCache.new(@@build_file.new(self,file,Digest::MD5.hexdigest(content)))
+    end
+    def self.current()
+      @@build_file
     end
   end
   
@@ -333,7 +353,7 @@ module Rmk
                 end
               end
             else
-              raise "Rebuilding #{work_item.name}) because it doesn't exist" if @readonly
+              raise "Rebuilding #{work_item.name} because it doesn't exist" if @readonly
             end
             if rebuild
             	cache(work_item) do

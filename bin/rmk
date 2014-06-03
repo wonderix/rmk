@@ -21,6 +21,9 @@ OptionParser.new do |opts|
   opts.on("-v", "--verbose", "verbose mode ") do |v|
     Rmk.verbose += 1
   end
+  opts.on("-j", "--jobs [N]", "allow N jobs at parallel") do |v|
+    Rmk::WorkItem.jobs = v.to_i
+  end
 end.parse!
 
 result = 0
@@ -36,7 +39,7 @@ EventMachine.run do
       puts "Build OK"
     rescue Exception => exc
       STDERR.puts exc.message
-      STDERR.puts exc.backtrace.join("\n")
+      STDERR.puts exc.backtrace.join("\n")  if Rmk.verbose > 0
       puts "Build Failed"
       result = 1
     end

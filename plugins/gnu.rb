@@ -76,7 +76,8 @@ module Gnu
         ofile = File.join(target_dir,basename + ".o")
         dfile = File.join(target_dir,basename + ".d")
         FileUtils.mkdir_p(target_dir)
-        system("gcc -x c++ #{options[:flags].to_s} #{local_includes.join(" ")} -o #{ofile} #{includes.join(" ")} -MD -c #{cpp.result}")
+        lang = cpp[-2,2] == '.c' ? 'c' : 'c++'
+        system("gcc -x #{lang} #{options[:flags].to_s} #{local_includes.join(" ")} -o #{ofile} #{includes.join(" ")} -MD -c #{cpp.result}")
         content = File.read(dfile)
         File.delete(dfile)
         content.gsub!(/\b[A-Z]:\//i,"/")
