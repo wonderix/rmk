@@ -18,6 +18,9 @@ OptionParser.new do |opts|
   opts.on("-c", "--cache [url]", "use build cache ") do |v|
     policy = Rmk::CacheBuildPolicy.new(v)
   end
+  opts.on("-v", "--verbose", "verbose mode ") do |v|
+    Rmk.verbose += 1
+  end
 end.parse!
 
 result = 0
@@ -28,7 +31,8 @@ EventMachine.run do
   Fiber.new do 
     begin
       work_items = build_file.send(task.intern)
-      policy.build(work_items)
+      item = policy.build(work_items)
+      p item.result if Rmk.verbose > 0
       puts "Build OK"
     rescue Exception => exc
       STDERR.puts exc.message

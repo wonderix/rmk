@@ -1,5 +1,5 @@
 require 'fileutils'
-
+require 'tmpdir.rb'
 
 module Cpp
   class ObjectFile < String
@@ -29,6 +29,22 @@ module Cpp
       @mtime ||= File.mtime(self)
     end
   end
+  
+  class Include
+    attr_reader :includes
+    def initialize(dirs,options)
+      @includes = dirs.map{ | x |  "-I#{x}" }
+    end
+    def inspect()
+     "<Cpp::Include: @includes=#{@includes.inspect}>"
+    end
+    def mtime
+      @mtime ||= File.mtime(self)
+    end
+    def result
+      return self
+    end
+  end
 end
 
 module Gnu
@@ -36,10 +52,16 @@ module Gnu
   include Rmk::Tools
   
   TARGET = "i486-linux"
+  
+  
+  def inc(dirs, options = {})
+      return [ Cpp::Include.new(dirs, options ) ]
+  end
 
   def cc(files,depends, options = {}) 
     result = []
-    local_includes = files.empty? ? [ "-I#{dir}" ]  : files.map{ | x | "-I" + File.dirname(x)}.uniq
+    return inc([dir],options) if files.empty?
+    local_includes = files.map{ | x | "-I" + File.dirname(x)}.uniq
     files.each do | cpp |
       header = []
       basename, suffix  = File.basename(cpp.to_s).split(".")
@@ -54,7 +76,7 @@ module Gnu
         ofile = File.join(target_dir,basename + ".o")
         dfile = File.join(target_dir,basename + ".d")
         FileUtils.mkdir_p(target_dir)
-        system("gcc -x c++ #{options[:flags].to_s} -I#{dir} -o #{ofile} #{includes.join(" ")} -MD -c #{cpp.result}")
+        system("gcc -x c++ #{options[:flags].to_s} #{local_includes.join(" ")} -o #{ofile} #{includes.join(" ")} -MD -c #{cpp.result}")
         content = File.read(dfile)
         File.delete(dfile)
         content.gsub!(/\b[A-Z]:\//i,"/")
@@ -65,6 +87,7 @@ module Gnu
         content.each{ | h | hidden[h] = true }
         result = Cpp::ObjectFile.new(ofile)
         result.includes.concat(local_includes)
+        result.includes.concat(options[:flags].to_s.split().select{ | x | x[0,2] == "-I"} )
         result.includes.concat(includes).uniq!
         result
       end
@@ -78,9 +101,10 @@ module Gnu
       FileUtils.mkdir_p(target_dir)
       lib = Cpp::Archive.new(File.join(target_dir, "lib" + name+".a"))
       objects = depends.map{ | x | x.result }
-    	objects.each do | d |
+   	  objects.each do | d |
       	lib.includes.concat(d.includes) if d.respond_to?(:includes)
     	end
+      objects = objects.delete_if{ | x | x.is_a?(Cpp::Include) }
     	lib.includes.uniq!
       cfile = File.join(target_dir,name + ".cmd")
       File.open(cfile,"w") { | f | f.write(objects.join(" ")) }

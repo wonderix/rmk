@@ -40,6 +40,13 @@ class Array
 end
 
 module Rmk
+
+  def self.verbose()
+    @verbose.to_i
+  end
+  def self.verbose=(level)
+    @verbose = level
+  end
   class MethodCache
     def initialize(delegate)
       @cache = Hash.new
@@ -106,7 +113,7 @@ module Rmk
       msg.to_s.gsub(/(\/[^\s:]*\/)/) { File.relative_path_from($1,Dir.getwd) + "/" }
     end		
     def system(cmd)
-      message = Tools.relative(cmd)
+      message = Rmk.verbose > 0 ? cmd : Tools.relative(cmd)
       puts(message)
       out = STDOUT
       if cmd =~ /(.*)\s*>\s*(\S*)$/
@@ -152,7 +159,7 @@ module Rmk
     end
     
     def inspect()
-      "@name=#{@name.inspect} @dir=#{@plan.dir} @depends=#{@depends.inspect}"
+      "<WorkItem @name=#{@name.inspect} @dir=#{@plan.dir} @depends=#{@depends.inspect} @result=#{@result.inspect}>"
     end
     
     def mtime()
@@ -290,15 +297,15 @@ module Rmk
   
   class AlwaysBuildPolicy
     def build(work_items)
-      result = []
       work_items.each do | work_item |
         if work_item.is_a?(WorkItem)
-          result << work_item.result ||= work_item.block.call(build(work_item.depends).flatten,[])
-        else
-          result << work_item
-        end
+          unless work_item.result
+            build(work_item.depends + work_item.include_depends)
+            work_item.build()
+          end
+         end
       end
-      result
+      work_items.map { | x |  x.result }
     end
   end
   
@@ -339,7 +346,7 @@ module Rmk
           end
         end
       end
-      work_items.each { | w |  w.result }
+      work_items.map { | x |  x.result }
     end
   end
 
