@@ -3,10 +3,10 @@ require 'tmpdir.rb'
 
 module Cpp
   class ObjectFile < String
-    attr_reader :includes
+    attr_reader :flags
     def initialize(file)
       super(file)
-      @includes = []
+      @flags = []
     end
     def inspect()
      "Cpp::ObjectFile:#{super.to_s}"
@@ -17,29 +17,52 @@ module Cpp
   end
 
   class Archive < String
-    attr_reader :includes
+    attr_reader :flags
     def initialize(name)
       super(name)
-      @includes = []
+      @flags = []
     end
     def inspect()
-     "Cpp::Archive:#{super.to_s}"
+     "Cpp::Archive:#{super.to_s} @flags=#{@flags.inspect}"
     end
     def mtime
       @mtime ||= File.mtime(self)
+    end
+    def name()
+      return File.basename(self,".a")[3..-1]
+    end
+  end
+
+  class SharedLibrary < String
+    attr_reader :flags
+    def initialize(name,flags)
+      super(name)
+      @flags = flags
+    end
+    def inspect()
+     "Cpp::SharedLibrary:#{super.to_s} @flags=#{@flags.inspect}"
+    end
+    def mtime
+      @mtime ||= File.mtime(self)
+    end
+    def name()
+      return File.basename(self,".so")[3..-1]
     end
   end
   
   class Include
-    attr_reader :includes
-    def initialize(dirs,options)
-      @includes = dirs.map{ | x |  "-I#{x}" }
+    attr_reader :flags
+    def initialize(flags)
+      @flags = flags
     end
     def inspect()
-     "<Cpp::Include: @includes=#{@includes.inspect}>"
+     "<Cpp::Include: @flags=#{@flags.inspect}>"
     end
     def mtime
-      @mtime ||= File.mtime(self)
+      @mtime ||= Time.at(0)
+    end
+    def to_s()
+      @flags.join(" ")
     end
     def result
       return self
@@ -55,7 +78,7 @@ module Gnu
   
   
   def inc(dirs, options = {})
-      return [ Cpp::Include.new(dirs, options ) ]
+      return [ Cpp::Include.new(dirs.map{ | x | "-I#{x}"} ) ]
   end
 
   def cc(files,depends, options = {}) 
@@ -66,18 +89,18 @@ module Gnu
       header = []
       basename, suffix  = File.basename(cpp.to_s).split(".")
       result << work_item(basename + ".o",[cpp],depends) do | hidden |
-        includes = [] 
+        flags = [] 
         depends.each do | d |
           d = d.result
-          includes.concat(d.includes) if d.respond_to?(:includes)
+          flags.concat(d.flags) if d.respond_to?(:flags)
         end
-        includes.uniq!
+        flags.uniq!
         target_dir = File.join(build_dir,TARGET)
         ofile = File.join(target_dir,basename + ".o")
         dfile = File.join(target_dir,basename + ".d")
         FileUtils.mkdir_p(target_dir)
         lang = cpp[-2,2] == '.c' ? 'c' : 'c++'
-        system("gcc -x #{lang} #{options[:flags].to_s} #{local_includes.join(" ")} -o #{ofile} #{includes.join(" ")} -MD -c #{cpp.result}")
+        system("gcc -x #{lang} #{options[:flags].to_s} #{local_includes.join(" ")} -fPIC -o #{ofile} #{flags.join(" ")} -MD -c #{cpp.result}")
         content = File.read(dfile)
         File.delete(dfile)
         content.gsub!(/\b[A-Z]:\//i,"/")
@@ -87,9 +110,9 @@ module Gnu
         content.shift()
         content.each{ | h | hidden[h] = true }
         result = Cpp::ObjectFile.new(ofile)
-        result.includes.concat(local_includes)
-        result.includes.concat(options[:flags].to_s.split().select{ | x | x[0,2] == "-I"} )
-        result.includes.concat(includes).uniq!
+        result.flags.concat(local_includes)
+        result.flags.concat(options[:flags].to_s.split() )
+        result.flags.concat(flags).uniq!
         result
       end
     end
@@ -101,16 +124,17 @@ module Gnu
       target_dir = File.join(build_dir,TARGET)
       FileUtils.mkdir_p(target_dir)
       lib = Cpp::Archive.new(File.join(target_dir, "lib" + name+".a"))
-      objects = depends.map{ | x | x.result }
-   	  objects.each do | d |
-      	lib.includes.concat(d.includes) if d.respond_to?(:includes)
+      objflags = []
+  	  depends.map{ | x | x.result }.each do | d |
+      	lib.flags.concat(d.flags) if d.respond_to?(:flags)
+        case d
+        when Cpp::ObjectFile
+          objflags << d
+        end
     	end
-      objects = objects.delete_if{ | x | x.is_a?(Cpp::Include) }
-    	lib.includes.uniq!
-      cfile = File.join(target_dir,name + ".cmd")
-      File.open(cfile,"w") { | f | f.write(objects.join(" ")) }
+      lib.flags.uniq!
       FileUtils.rm_f(lib)
-      system("ar -cr  #{lib} #{objects.join(" ")}  ")
+      system("ar -cr  #{lib} #{objflags.join(" ")}  ")
       lib
     end
     [ result ]
@@ -121,17 +145,57 @@ module Gnu
       target_dir = File.join(build_dir,TARGET)
       FileUtils.mkdir_p(target_dir)
       ofile = File.join(target_dir,name)
-      objects = depends.map{ | x | x.result }
-      libs = objects.select{ | o | o[-2,2] == ".a" }
-      objects = objects - libs
+      libflags = []
+      objflags = []
+   	  depends.map{ | x | x.result }.each do | d |
+        case d
+        when Cpp::Archive, Cpp::SharedLibrary
+          libflags << "-Wl,-rpath,#{File.dirname(d)}" if d.is_a?(Cpp::SharedLibrary)
+          libflags << "-L#{File.dirname(d)}"
+          libflags << "-l#{d.name}"
+        when Cpp::ObjectFile
+          objflags << d
+        end
+    	end
       start_group = "-Wl,--start-group"
       end_group = "-Wl,--end-group"
       if RUBY_PLATFORM =~ /darwin/
       	start_group = end_group = ""
       end
-      libflags = libs.map{| a | "-L#{File.dirname(a)} -l#{File.basename(a,".a")[3..-1]}"}.join(" ")
-      system("g++ #{objects.join(" ")} #{start_group} #{libflags} #{end_group}  -o #{ofile} ")
+      system("g++ #{objflags.join(" ")} #{start_group} #{libflags.join(" ")} #{end_group}  -o #{ofile} ")
       ofile
+    end
+    [ result ]
+  end
+  
+  def ld_shared(name,depends, options = {}) 
+    name = "lib" + name + ".so"
+    result = work_item(name,depends) do 
+      target_dir = File.join(build_dir,TARGET)
+      FileUtils.mkdir_p(target_dir)
+      libflags = []
+      objflags = []
+      inc = []
+      flags = []
+   	  depends.map{ | x | x.result }.each do | d |
+      	flags.concat(d.flags) if d.respond_to?(:flags)
+        case d
+        when Cpp::Archive, Cpp::SharedLibrary
+          libflags << "-Wl,-rpath,#{File.dirname(d)}" if d.is_a?(Cpp::SharedLibrary)
+          libflags << "-L#{File.dirname(d)}"
+          libflags << "-l#{d.name}"
+        when Cpp::ObjectFile
+          objflags << d
+       end
+    	end
+      lib = Cpp::SharedLibrary.new(File.join(target_dir, name),flags.uniq)
+      start_group = "-Wl,--start-group"
+      end_group = "-Wl,--end-group"
+      if RUBY_PLATFORM =~ /darwin/
+        start_group = end_group = ""
+      end
+      system("g++ -shared -Wl,-soname=#{name} #{objflags.join(" ")} #{start_group} #{libflags.join(" ")} #{end_group}  -o #{lib} ")
+      lib
     end
     [ result ]
   end

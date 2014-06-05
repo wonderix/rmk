@@ -13,7 +13,7 @@ class File
   def self.relative_path_from(src,base)
     s = src.split("/")
     b = base.split("/")
-    j = 0
+    j = s.length
     return src if s[1] != b[1]
     return "./" if s == b
     for i in 0...s.length
@@ -147,7 +147,7 @@ module Rmk
       @result = nil
       md5 = Digest::MD5.new
       md5.update(plan.md5)
-      sources.each { | s | md5.update(s); }
+      sources.each { | s | md5.update(s.to_s); }
       @file = File.join(plan.build_dir,"cache/#{@name}/#{md5.hexdigest}")
     end
     
@@ -158,6 +158,7 @@ module Rmk
           @headers = File.open(@file +".dep","rb") { | f | Marshal.load(f) }
         rescue Errno::ENOENT
         rescue Exception
+          puts "Removing #{@file}" if Rmk.verbose > 0
           File.delete(@file) if File.readable?(@file)
         end
       end
@@ -214,11 +215,11 @@ module Rmk
           if d.is_a?(WorkItem)
             d.sources(@sources)
           else
-            @sources[d.to_s] = true
+            @sources[d.to_s] = d
           end
         end
       end
-      result ? result.merge!(@sources)  : @sources.keys
+      result ? result.merge!(@sources)  : @sources.values
     end
     
     def headers(result = nil)
@@ -345,7 +346,7 @@ module Rmk
               rebuild = false
               mtime = work_item.mtime
               (work_item.sources + work_item.headers).each do | d |
-                dmtime = File.mtime(d)
+                dmtime = d.respond_to?(:mtime) ? d.mtime : File.mtime(d)
                 if dmtime > mtime
                   raise "Rebuilding #{work_item.name}(#{mtime}) because #{Tools.relative(d)}(#{dmtime}) is newer" if @readonly
                   rebuild = true 
@@ -372,7 +373,7 @@ module Rmk
 
   class CacheBuildPolicy < ModificationTimeBuildPolicy
   	def initialize(url)
-  		@url = url
+ 		  @url = url
   		@md5_cache = {}
   	end
   	def md5(file)
