@@ -46,6 +46,7 @@ module Rmk
   def self.verbose()
     @verbose.to_i
   end
+
   def self.verbose=(level)
     @verbose = level
   end
@@ -119,8 +120,8 @@ module Rmk
     def system(cmd)
       message = Rmk.verbose > 0 ? cmd : Tools.relative(cmd)
       stringio = StringIO.new()
+      puts(message)
       out = Tee.open(stringio)
-      out.puts(message)
       if cmd =~ /(.*)\s*>\s*(\S*)$/
         out = File.open($2,'wb')
         cmd = $1
@@ -143,6 +144,7 @@ module Rmk
     end
     
     attr_reader :name, :plan, :depends, :block, :include_depends, :file
+    attr_accessor :exception
     def initialize(name,plan,depends,include_depends,&block)
       @name = name
       @plan = plan
@@ -150,12 +152,21 @@ module Rmk
       @include_depends = include_depends
       @block = block
       @result = nil
+      @exception = nil
       md5 = Digest::MD5.new
       md5.update(plan.md5)
       sources.each { | s | md5.update(s.to_s); }
       @file = File.join(plan.build_dir,"cache/#{@name}/#{md5.hexdigest}")
     end
     
+    def id()
+      md5 = Digest::MD5.new
+      md5.update(@plan.md5)
+      md5.update(@plan.dir)
+      md5.update(@name)
+      md5.hexdigest
+    end
+      
     def last_result()
       unless @last_result
         begin
@@ -199,17 +210,31 @@ module Rmk
     end
     
     def result()
-      @result = @result.result if @result.is_a?(Future)
+      if @result.is_a?(Future)
+        begin
+          @result = @result.result
+          @exception = nil
+        rescue Exception => exc
+          @exception = exc
+          raise exc
+        end
+      end
       @result
     end
     
-    def build()
+    def build(policy)
+      begin
+        policy.build(self.depends + self.include_depends)
+      rescue Exception => exc
+        @exception = exc
+        raise exc
+      end
       @result = Future.new(@name) do
         headers()
         result = @block.call(@headers)
         save(result)
       end
-      @result.result if Job.threads == 1
+      return result() if Job.threads == 1
       @result
     end
     
@@ -268,10 +293,6 @@ module Rmk
       Kernel.require File.join(File.expand_path(File.dirname(File.dirname(__FILE__))),"plugins",name + ".rb")
       include const_get(name.capitalize)
     end
-
-    def self.load(name)
-      PlanCache.current.module_eval(File.read(File.join(@dir,name)))
-    end
    
     def job(name,depends, include_depends = [], &block)
       return Job.new(name,self,depends,include_depends,&block)
@@ -300,25 +321,25 @@ module Rmk
   end
 
   class PlanCache
-    @@build_file = nil
+
     def initialize()
       @cache = Hash.new
     end
+
     def load(file, dir = ".")
       file = File.expand_path(File.join(dir,file))
       file = File.join(file,"build.rmk") if File.directory?(file)
       @cache[file] ||= load_inner(file)
     end
+
     def load_inner(file)
-      @@build_file = Class.new(Plan)
+      plan_class = Class.new(Plan)
       content = File.read(file)
-      @@build_file.file = file
-      @@build_file.module_eval(content,file,1)
-      MethodCache.new(@@build_file.new(self,file,Digest::MD5.hexdigest(content)))
+      plan_class.file = file
+      plan_class.module_eval(content,file,1)
+      MethodCache.new(plan_class.new(self,file,Digest::MD5.hexdigest(content)))
     end
-    def self.current()
-      @@build_file
-    end
+
   end
   
   class AlwaysBuildPolicy
@@ -326,10 +347,9 @@ module Rmk
       jobs.each do | job |
         if job.is_a?(Job)
           unless job.result
-            build(job.depends + job.include_depends)
-            job.build()
+            job.build(self)
           end
-         end
+        end
       end
       jobs.map { | x |  x.result }
     end
@@ -363,8 +383,7 @@ module Rmk
             end
             if rebuild
               cache(job) do
-                build(job.depends + job.include_depends)
-                 job.build()
+                job.build(self)
               end
             else
               job.use_last_result
@@ -463,7 +482,7 @@ module Rmk
     attr_accessor :dir, :policy, :task
 
     def initialize()
-      @dir = '.'
+      @dir = Dir.getwd()
       @policy = ModificationTimeBuildPolicy.new()
       @task = "all"
     end
@@ -474,6 +493,7 @@ module Rmk
       build_file = build_file_cache.load("build.rmk",@dir)
       EventMachine.run do
         Fiber.new do
+          jobs = nil
           begin
             jobs = build_file.send(@task.intern)
             item = @policy.build(jobs)
@@ -485,7 +505,7 @@ module Rmk
             puts "Build Failed"
             result = 1
           end
-          yield if block_given?
+          yield jobs if block_given?
         end.resume
       end
       return result

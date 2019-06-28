@@ -12,6 +12,8 @@ Gem::Specification.new 'rmk', '0.0.1' do |s|
   s.add_dependency 'eventmachine', '~> 1.0'
   s.add_dependency 'em-http-request', '~> 1.0'
   s.add_dependency 'tee', '~> 1.0'
+  s.add_dependency 'thin', '~> 1.0'
+  s.add_dependency 'slim'
   s.require_path          = "lib"
   s.bindir                = "bin"
   s.license               = "LICENSE"

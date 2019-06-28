@@ -25,5 +25,5 @@ def image()
 end
 
 def all()
-  strings(project("main").compile_cpp()) + project("main").compile_java()
+  strings(project("main").compile_cpp()) + project("main").compile_java() + image()
 end
