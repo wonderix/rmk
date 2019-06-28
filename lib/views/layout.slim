@@ -1,0 +1,38 @@
+doctype html
+html(lang='en')
+  head
+    title Ruby make
+    link(rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/materialize/1.0.0/css/materialize.min.css")
+    link(rel="stylesheet" href="https://stackpath.bootstrapcdn.com/font-awesome/4.7.0/css/font-awesome.min.css")
+    link(rel="stylesheet" href="/css/rmk.css")
+    script(src="https://cdnjs.cloudflare.com/ajax/libs/materialize/1.0.0/js/materialize.min.js")
+  body
+    nav.blue.darken-2
+      .nav-wrapper
+        a.brand-logo href="#!"  Ruby make
+        a.button-collapse data-activates="mobile-demo" href="#"
+          i.mdi-navigation-menu
+        ul.right.hide-on-med-and-down
+          li
+            a href="#"  Link1
+          li
+            a href="#"  Link2
+          li
+            a href="#"  Link3
+        ul#mobile-demo.side-nav
+          li
+            a href="#"  Link1
+          li
+            a href="#"  Link2
+          li
+            a href="#"  Link3
+    #index-banner.section.no-pad-bot.gray.lighten-5
+      .container
+        br/
+        br/
+        == yield
+        br/
+    .container
+    footer.page-footer.blue.darken-3
+      .footer-copyright
+        .container
