@@ -6,6 +6,7 @@ require 'fiber'
 require 'optparse'
 require 'em-http-request'
 require 'json'
+require 'stringio'
 
 
 
@@ -115,14 +116,14 @@ module Rmk
     end		
     def system(cmd)
       message = Rmk.verbose > 0 ? cmd : Tools.relative(cmd)
-      puts(message)
-      out = STDOUT
+      out = StringIO.new()
+      out.puts(message)
       if cmd =~ /(.*)\s*>\s*(\S*)$/
         out = File.open($2,'wb')
         cmd = $1
       end
-      EventMachine.popen(cmd, PipeReader,Fiber.current,out)
-      raise "Error running \"#{cmd}\"" unless Fiber.yield == 0
+      EventMachine.popen("sh -c '#{cmd} 2>&1'", PipeReader,Fiber.current,out)
+      raise "Error running \"#{cmd}\"\n#{out.string}" unless Fiber.yield == 0
     end
   end
 

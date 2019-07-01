@@ -1,5 +1,5 @@
 #!/usr/bin/env ruby
-require 'rmk'
+require_relative '../lib/rmk.rb'
 
 dir = '.'
 policy = Rmk::ModificationTimeBuildPolicy.new()
@@ -39,7 +39,7 @@ EventMachine.run do
       puts "Build OK"
     rescue Exception => exc
       STDERR.puts exc.message
-      STDERR.puts exc.backtrace.join("\n")  if Rmk.verbose > 0
+      # STDERR.puts exc.backtrace.join("\n")  if Rmk.verbose > 0
       puts "Build Failed"
       result = 1
     end
