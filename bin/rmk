@@ -1,22 +1,22 @@
 #!/usr/bin/env ruby
 require_relative '../lib/rmk.rb'
 
-dir = '.'
-policy = Rmk::ModificationTimeBuildPolicy.new()
+controller = Rmk::Controller.new()
+
 OptionParser.new do |opts|
   opts.banner = "Usage: rmk.rb [options] [target]"
 
   opts.on("-C", "--directory [directory]", "Change to directory ") do |v|
-    dir = v
+    controller.dir = v
   end
   opts.on("-r", "--readonly", "Raise exception when files are rebuild") do |v|
-    policy = Rmk::ModificationTimeBuildPolicy.new(true)
+    controller.policy = Rmk::ModificationTimeBuildPolicy.new(true)
   end
   opts.on("-a", "--always", "build files unconditionally") do |v|
-    policy = Rmk::AlwaysBuildPolicy.new()
+    controller.policy = Rmk::AlwaysBuildPolicy.new()
   end
   opts.on("-c", "--cache [url]", "use build cache ") do |v|
-    policy = Rmk::CacheBuildPolicy.new(v)
+    controller.policy = Rmk::CacheBuildPolicy.new(v)
   end
   opts.on("-v", "--verbose", "verbose mode ") do |v|
     Rmk.verbose += 1
@@ -26,24 +26,9 @@ OptionParser.new do |opts|
   end
 end.parse!
 
+controller.task = ARGV[0] || controller.task
 result = 0
-build_file_cache = Rmk::PlanCache.new()
-build_file = build_file_cache.load("build.rmk",dir)
-task = ARGV[0] || "all"
 EventMachine.run do
-  Fiber.new do 
-    begin
-      work_items = build_file.send(task.intern)
-      item = policy.build(work_items)
-      p item.result if Rmk.verbose > 0
-      puts "Build OK"
-    rescue Exception => exc
-      STDERR.puts exc.message
-      # STDERR.puts exc.backtrace.join("\n")  if Rmk.verbose > 0
-      puts "Build Failed"
-      result = 1
-    end
-    EventMachine.stop
-  end.resume
+  result = controller.run()
 end
 exit(result)

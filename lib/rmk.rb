@@ -113,7 +113,7 @@ module Rmk
   
     def self.relative(msg)
       msg.to_s.gsub(/(\/[^\s:]*\/)/) { File.relative_path_from($1,Dir.getwd) + "/" }
-    end		
+    end    
     def system(cmd)
       message = Rmk.verbose > 0 ? cmd : Tools.relative(cmd)
       out = StringIO.new()
@@ -167,7 +167,7 @@ module Rmk
     end
     
     def use_last_result()
-    	@result = @last_result
+      @result = @last_result
     end
     
     def inspect()
@@ -175,7 +175,7 @@ module Rmk
     end
     
     def mtime()
-    	File.mtime(@file)
+      File.mtime(@file)
     end
     
     def import(result,headers)
@@ -188,7 +188,7 @@ module Rmk
     end
     
     def save(result)
-			FileUtils.mkdir_p(File.dirname(@file))
+      FileUtils.mkdir_p(File.dirname(@file))
       File.open(@file,"wb") { | f | Marshal.dump(result,f) }
       File.open(@file +".dep","wb") { | f | Marshal.dump(@headers,f) } unless @headers.empty?
       result
@@ -336,7 +336,7 @@ module Rmk
       @readonly = readonly
     end
     def cache(work_item,&block)
-    	block.call
+      block.call
     end
     def build(work_items)
       work_items.each do | work_item |
@@ -358,12 +358,12 @@ module Rmk
               raise "Rebuilding #{work_item.name} because it doesn't exist" if @readonly
             end
             if rebuild
-            	cache(work_item) do
-              	build(work_item.depends + work_item.include_depends)
-               	work_item.build()
+              cache(work_item) do
+                build(work_item.depends + work_item.include_depends)
+                 work_item.build()
               end
             else
-            	work_item.use_last_result
+              work_item.use_last_result
             end 
           end
         end
@@ -373,87 +373,121 @@ module Rmk
   end
 
   class CacheBuildPolicy < ModificationTimeBuildPolicy
-  	def initialize(url)
- 		  @url = url
-  		@md5_cache = {}
-  	end
-  	def md5(file)
-  		@md5_cache[file] ||= begin
-  		  Digest::MD5.hexdigest(File.open(file,'rb'){ | f | f.read()}.gsub(/\s+/,""))
-  		rescue Errno::ENOENT
-  			"0000"
-  		end
-  	end
-  	def put(path,body)
-			f = Fiber.current
-			http = EventMachine::HttpRequest.new(File.join(@url,path)).put :body => body
-			http.callback { f.resume(http) }
-			http.errback  { f.resume(http) }
-			http = Fiber.yield
-  	end
-  	def get(path)
-      f = Fiber.current
-			http = EventMachine::HttpRequest.new(File.join(@url,path)).get
-			http.callback { f.resume(http) }
-			http.errback  { f.resume(http) }
-			http = Fiber.yield
-			code = http.response_header.status
-			raise Errno::ENOENT.new("File '#{path}' not found: #{code}") unless code == 200
-			http.response
-  	end
-    def cache(work_item,&block)
-			sources = work_item.sources
-			sources << work_item.plan.to_s
-			
-			id = Digest::MD5.new
-			sources.sort.each do | k |
-				id.update(k)
-				id.update(md5(k))
-			end
-			id = id.hexdigest
-			result = nil
-			begin
-				JSON.parse(get(File.join(work_item.name,id,"index"))).each do | entries |
-					entries.each do | hid , headers |
-						found = true
-						headers.each do | file , x |
-							found &&= ( md5(file) == x )
-						end
-						if found
-							result = JSON.parse(get(File.join(work_item.name,id,hid+".json")))['result']
-							FileUtils.mkdir_p(File.dirname(result))
-							File.open(result,'wb') { | f | f.write(get(File.join(work_item.name,id,hid+".bin"))) }
-							puts("GET #{result}")
-							work_item.import(result,headers)
-							break
-						end
-					end
-				end
+    def initialize(url)
+       @url = url
+      @md5_cache = {}
+    end
+    def md5(file)
+      @md5_cache[file] ||= begin
+        Digest::MD5.hexdigest(File.open(file,'rb'){ | f | f.read()}.gsub(/\s+/,""))
       rescue Errno::ENOENT
-			rescue Exception => exc
+        "0000"
+      end
+    end
+    def put(path,body)
+      f = Fiber.current
+      http = EventMachine::HttpRequest.new(File.join(@url,path)).put :body => body
+      http.callback { f.resume(http) }
+      http.errback  { f.resume(http) }
+      http = Fiber.yield
+    end
+    def get(path)
+      f = Fiber.current
+      http = EventMachine::HttpRequest.new(File.join(@url,path)).get
+      http.callback { f.resume(http) }
+      http.errback  { f.resume(http) }
+      http = Fiber.yield
+      code = http.response_header.status
+      raise Errno::ENOENT.new("File '#{path}' not found: #{code}") unless code == 200
+      http.response
+    end
+    def cache(work_item,&block)
+      sources = work_item.sources
+      sources << work_item.plan.to_s
+      
+      id = Digest::MD5.new
+      sources.sort.each do | k |
+        id.update(k)
+        id.update(md5(k))
+      end
+      id = id.hexdigest
+      result = nil
+      begin
+        JSON.parse(get(File.join(work_item.name,id,"index"))).each do | entries |
+          entries.each do | hid , headers |
+            found = true
+            headers.each do | file , x |
+              found &&= ( md5(file) == x )
+            end
+            if found
+              result = JSON.parse(get(File.join(work_item.name,id,hid+".json")))['result']
+              FileUtils.mkdir_p(File.dirname(result))
+              File.open(result,'wb') { | f | f.write(get(File.join(work_item.name,id,hid+".bin"))) }
+              puts("GET #{result}")
+              work_item.import(result,headers)
+              break
+            end
+          end
+        end
+      rescue Errno::ENOENT
+      rescue Exception => exc
         STDERR.puts exc.message
         STDERR.puts exc.backtrace.join("\n")
-			end
-			unless work_item.result
-				block.call()
-				headers = {}
-				hid = Digest::MD5.new
-				work_item.headers.sort.each do | k |
-					hid.update(k)
-					x = md5(k)
-					headers[k] = x
-					hid.update(x)
-				end
-				hid = hid.hexdigest
-				if work_item.result.is_a?(String)
-					put(File.join(work_item.name,id,hid+".json"),{ 'result' => work_item.result}.to_json)
-					put(File.join(work_item.name,id,hid+".bin"),File.open(work_item.result,'rb'){ | f | f.read()})
-					put(File.join(work_item.name,id,hid+".dep"),{ hid => headers}.to_json)
-				end
-			end
+      end
+      unless work_item.result
+        block.call()
+        headers = {}
+        hid = Digest::MD5.new
+        work_item.headers.sort.each do | k |
+          hid.update(k)
+          x = md5(k)
+          headers[k] = x
+          hid.update(x)
+        end
+        hid = hid.hexdigest
+        if work_item.result.is_a?(String)
+          put(File.join(work_item.name,id,hid+".json"),{ 'result' => work_item.result}.to_json)
+          put(File.join(work_item.name,id,hid+".bin"),File.open(work_item.result,'rb'){ | f | f.read()})
+          put(File.join(work_item.name,id,hid+".dep"),{ hid => headers}.to_json)
+        end
+      end
     end
   end
 
+
+  class Controller
+    attr_accessor :dir, :policy, :task
+
+    def initialize()
+      @dir = '.'
+      @policy = ModificationTimeBuildPolicy.new()
+      @task = "all"
+    end
+
+    def run()
+      result = 0
+      build_file_cache = PlanCache.new()
+      build_file = build_file_cache.load("build.rmk",@dir)
+      EventMachine.run do
+        Fiber.new do
+          begin
+            work_items = build_file.send(@task.intern)
+            item = @policy.build(work_items)
+            p item.result if Rmk.verbose > 0
+            puts "Build OK"
+          rescue Exception => exc
+            STDERR.puts exc.message
+            # STDERR.puts exc.backtrace.join("\n")  if Rmk.verbose > 0
+            puts "Build Failed"
+            result = 1
+          end
+          EventMachine.stop
+        end.resume
+      end
+      return result
+    end
+
+  end
 
 end
 
