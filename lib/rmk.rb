@@ -7,6 +7,7 @@ require 'optparse'
 require 'em-http-request'
 require 'json'
 require 'stringio'
+require 'tee'
 
 
 
@@ -116,14 +117,15 @@ module Rmk
     end    
     def system(cmd)
       message = Rmk.verbose > 0 ? cmd : Tools.relative(cmd)
-      out = StringIO.new()
+      stringio = StringIO.new()
+      out = Tee.open(stringio)
       out.puts(message)
       if cmd =~ /(.*)\s*>\s*(\S*)$/
         out = File.open($2,'wb')
         cmd = $1
       end
       EventMachine.popen("sh -c '#{cmd} 2>&1'", PipeReader,Fiber.current,out)
-      raise "Error running \"#{cmd}\"\n#{out.string}" unless Fiber.yield == 0
+      raise "Error running \"#{cmd}\"\n#{stringio.string}" unless Fiber.yield == 0
     end
   end
 
@@ -481,7 +483,7 @@ module Rmk
             puts "Build Failed"
             result = 1
           end
-          EventMachine.stop
+          yield if block_given?
         end.resume
       end
       return result

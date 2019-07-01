@@ -29,6 +29,8 @@ end.parse!
 controller.task = ARGV[0] || controller.task
 result = 0
 EventMachine.run do
-  result = controller.run()
+  result = controller.run() do
+    EventMachine.stop
+  end
 end
 exit(result)
