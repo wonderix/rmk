@@ -1,3 +1,9 @@
+GIT
+  remote: https://github.com/yurinnick/ruby-dockerfile-parser
+  revision: 686cc39fd6e23717ad4c94e14d31ef974296f35e
+  specs:
+    dockerfile_parser (0.4.0)
+
 GEM
   remote: https://rubygems.org/
   specs:
@@ -20,6 +26,7 @@ PLATFORMS
   ruby
 
 DEPENDENCIES
+  dockerfile_parser!
   em-http-request
   eventmachine
 

@@ -114,7 +114,8 @@ module Rmk
   
     def self.relative(msg)
       msg.to_s.gsub(/(\/[^\s:]*\/)/) { File.relative_path_from($1,Dir.getwd) + "/" }
-    end    
+    end
+
     def system(cmd)
       message = Rmk.verbose > 0 ? cmd : Tools.relative(cmd)
       stringio = StringIO.new()
@@ -125,7 +126,8 @@ module Rmk
         cmd = $1
       end
       EventMachine.popen("sh -c '#{cmd} 2>&1'", PipeReader,Fiber.current,out)
-      raise "Error running \"#{cmd}\"\n#{stringio.string}" unless Fiber.yield == 0
+      raise "#{cmd}\n#{stringio.string}" unless Fiber.yield == 0
+      stringio.string
     end
   end
 

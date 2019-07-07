@@ -1,2 +1,4 @@
 bin/public
 /*.gem
+.idea
+.vscode

@@ -1,6 +1,7 @@
 
 #include support for system command
 include Tools
+plugin 'docker'
 
 def strings(work_items)
   # create new work item and pass all dependencies
@@ -16,6 +17,11 @@ def strings(work_items)
     # return result from block
     result
   end.to_a
+end
+
+def image()
+  project("main").compile_cpp()
+  docker()
 end
 
 def all()
