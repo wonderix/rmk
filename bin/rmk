@@ -9,7 +9,7 @@ OptionParser.new do |opts|
   opts.banner = "Usage: rmk.rb [options] [target]"
 
   opts.on("-C", "--directory [directory]", "Change to directory ") do |v|
-    controller.dir = File.expand_path(v)
+    controller.dir = v
   end
   opts.on("-r", "--readonly", "Raise exception when files are rebuild") do |v|
     controller.policy = Rmk::ModificationTimeBuildPolicy.new(true)
@@ -23,7 +23,7 @@ OptionParser.new do |opts|
   opts.on("-v", "--verbose", "verbose mode ") do |v|
     Rmk.verbose += 1
   end
-  opts.on("-j", "--threads [N]", "allow N threads at parallel") do |v|
+  opts.on("-t", "--threads [N]", "allow N threads at parallel") do |v|
     Rmk::Job.threads = v.to_i
   end
   opts.on("-u", "--ui", "start web ui") do

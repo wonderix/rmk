@@ -1,0 +1,6 @@
+
+
+
+def all()
+  project("example/simple").all()
+end

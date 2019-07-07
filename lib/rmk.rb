@@ -8,6 +8,7 @@ require 'em-http-request'
 require 'json'
 require 'stringio'
 require 'tee'
+require 'uri'
 
 
 
@@ -50,6 +51,9 @@ module Rmk
   def self.verbose=(level)
     @verbose = level
   end
+
+  RMK_DIR = File.expand_path('~/.rmk')
+
   class MethodCache
     def initialize(delegate)
       @cache = Hash.new
@@ -321,15 +325,32 @@ module Rmk
   end
 
   class PlanCache
-
+    include Tools 
     def initialize()
       @cache = Hash.new
     end
 
     def load(file, dir = ".")
+      case dir
+      when /git@([^:]*):(.*)\/(.*)/
+        dir = git_pull(dir,File.join(RMK_DIR,$3.sub(/\.git$/,"")))
+      when /https{0,1}:\/\//
+        uri = URI.parse(dir)
+        dir = git_pull(dir,File.join(RMK_DIR,File.basename(uri.path).sub(/\.git$/,"")))
+      end
       file = File.expand_path(File.join(dir,file))
       file = File.join(file,"build.rmk") if File.directory?(file)
       @cache[file] ||= load_inner(file)
+    end
+
+    def git_pull(remote,local)
+      if File.directory?(local)
+        system("git  -C #{local} pull")
+      else
+        FileUtils.mkdir_p(File.dirname(local))
+        system("git clone --single-branch --branch master #{remote} #{local}")
+      end
+      return local
     end
 
     def load_inner(file)
@@ -489,10 +510,10 @@ module Rmk
 
     def run()
       result = 0
-      build_file_cache = PlanCache.new()
-      build_file = build_file_cache.load("build.rmk",@dir)
       EventMachine.run do
         Fiber.new do
+          build_file_cache = PlanCache.new()
+          build_file = build_file_cache.load("build.rmk",@dir)
           jobs = nil
           begin
             jobs = build_file.send(@task.intern)

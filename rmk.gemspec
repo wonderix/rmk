@@ -1,5 +1,5 @@
 
-Gem::Specification.new 'rmk', '0.0.1' do |s|
+Gem::Specification.new 'rmk', '0.1.0' do |s|
   s.description       = "rmk is a fast building tool"
   s.summary           = "building tool"
   s.authors           = ["Ulrich Kramer"]
