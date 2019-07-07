@@ -21,9 +21,9 @@ end
 
 def image()
   project("main").compile_cpp()
-  docker()
+  docker_build()
 end
 
 def all()
-  strings(project("main").compile_cpp()) + project("main").compile_java() + image()
+  strings(project("main").compile_cpp()+ project("main").compile_go()) + project("main").compile_java() + image()
 end

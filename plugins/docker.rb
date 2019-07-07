@@ -68,7 +68,7 @@ module Docker
 
   include Rmk::Tools
 
-  def docker(options = {})
+  def docker_build(options = {})
     docker_file = file("Dockerfile")
     docker_dir  = dir()
     result = []
