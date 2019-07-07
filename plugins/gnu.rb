@@ -88,7 +88,7 @@ module Gnu
     files.each do | cpp |
       header = []
       basename, suffix  = File.basename(cpp.to_s).split(".")
-      result << work_item(basename + ".o",[cpp],depends) do | hidden |
+      result << job(basename + ".o",[cpp],depends) do | hidden |
         flags = [] 
         depends.each do | d |
           d = d.result
@@ -120,7 +120,7 @@ module Gnu
   end
   
   def ar(name,depends, options = {}) 
-    result = work_item("lib" + name + ".a",depends) do
+    result = job("lib" + name + ".a",depends) do
       target_dir = File.join(build_dir,TARGET)
       FileUtils.mkdir_p(target_dir)
       lib = Cpp::Archive.new(File.join(target_dir, "lib" + name+".a"))
@@ -141,7 +141,7 @@ module Gnu
   end
   
   def ld(name,depends, options = {}) 
-    result = work_item(name,depends) do 
+    result = job(name,depends) do 
       target_dir = File.join(build_dir,TARGET)
       FileUtils.mkdir_p(target_dir)
       ofile = File.join(target_dir,name)
@@ -170,7 +170,7 @@ module Gnu
   
   def ld_shared(name,depends, options = {}) 
     name = "lib" + name + ".so"
-    result = work_item(name,depends) do 
+    result = job(name,depends) do 
       target_dir = File.join(build_dir,TARGET)
       FileUtils.mkdir_p(target_dir)
       libflags = []

@@ -108,20 +108,20 @@ The following script shows a simple example
 
 * Every build step must be encapsulated in a work item
 * All dependency checks are based on work items
-* All dependencies must be passed as argument to work_item
+* All dependencies must be passed as argument to job
 
 The following method extracts all strings from a given file
 
     #include support for system command
     include Tools
 
-    def strings(work_items)
+    def strings(jobs)
       # create new work item and pass all dependencies
       # when this item needs to be rebuild the given block is called 
-      work_item("strings",work_items) do 
+      job("strings",jobs) do 
         result = []
         # iterate of all items
-        work_items.each do | item |
+        jobs.each do | item |
           txt = item.result + ".txt"
           system("strings #{item.result} > #{txt}")
           result << txt

@@ -3,13 +3,13 @@
 include Tools
 plugin 'docker'
 
-def strings(work_items)
+def strings(jobs)
   # create new work item and pass all dependencies
   # when this item needs to be rebuild the given block is called 
-  work_item("strings",work_items) do 
+  job("strings",jobs) do 
     result = []
     # iterate of all items
-    work_items.each do | item |
+    jobs.each do | item |
       txt = item.result + ".txt"
       system("strings #{item.result} > #{txt}")
       result << txt

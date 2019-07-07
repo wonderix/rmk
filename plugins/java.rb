@@ -6,7 +6,7 @@ module Java
   include Rmk::Tools
   
   def javac(files,jarfiles, options = {})
-    result = work_item("classes",files+jarfiles) do
+    result = job("classes",files+jarfiles) do
       classes_dir = File.join(build_dir(),"classes")
       FileUtils.rm_rf(classes_dir)
       FileUtils.mkdir_p(classes_dir)
@@ -19,7 +19,7 @@ module Java
   end
   
   def jar(name,classfiles, resourcefiles = [], options= {})
-    result = work_item(name + ".jar",classfiles+resourcefiles) do
+    result = job(name + ".jar",classfiles+resourcefiles) do
       lib_dir = File.join(build_dir,"lib");
       result = File.join(lib_dir,name + ".jar")
       classes_dir = File.join(build_dir(),"classes")

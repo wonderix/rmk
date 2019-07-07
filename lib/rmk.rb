@@ -132,14 +132,14 @@ module Rmk
   end
 
 
-  class WorkItem
+  class Job
 
-    def self.jobs=(value)
-      @jobs = value
+    def self.threads=(value)
+      @threads = value
     end
     
-    def self.jobs()
-      @jobs || 100
+    def self.threads()
+      @threads || 100
     end
     
     attr_reader :name, :plan, :depends, :block, :include_depends, :file
@@ -175,7 +175,7 @@ module Rmk
     end
     
     def inspect()
-      "<WorkItem @name=#{@name.inspect} @dir=#{@plan.dir} @depends=#{@depends.inspect} @result=#{@result.inspect}>"
+      "<Job @name=#{@name.inspect} @dir=#{@plan.dir} @depends=#{@depends.inspect} @result=#{@result.inspect}>"
     end
     
     def mtime()
@@ -209,7 +209,7 @@ module Rmk
         result = @block.call(@headers)
         save(result)
       end
-      @result.result if WorkItem.jobs == 1
+      @result.result if Job.threads == 1
       @result
     end
     
@@ -217,7 +217,7 @@ module Rmk
       unless @sources
         @sources  = {}
         @depends.each do | d |
-          if d.is_a?(WorkItem)
+          if d.is_a?(Job)
             d.sources(@sources)
           else
             @sources[d.to_s] = d
@@ -231,7 +231,7 @@ module Rmk
       unless @headers
         @headers  = {}
         @depends.each do | d |
-          d.headers(@headers) if d.is_a?(WorkItem)
+          d.headers(@headers) if d.is_a?(Job)
         end
       end
       result ? result.merge!(@headers)  : @headers.keys
@@ -273,8 +273,8 @@ module Rmk
       PlanCache.current.module_eval(File.read(File.join(@dir,name)))
     end
    
-    def work_item(name,depends, include_depends = [], &block)
-      return WorkItem.new(name,self,depends,include_depends,&block)
+    def job(name,depends, include_depends = [], &block)
+      return Job.new(name,self,depends,include_depends,&block)
     end
     
     def glob(pattern)
@@ -322,16 +322,16 @@ module Rmk
   end
   
   class AlwaysBuildPolicy
-    def build(work_items)
-      work_items.each do | work_item |
-        if work_item.is_a?(WorkItem)
-          unless work_item.result
-            build(work_item.depends + work_item.include_depends)
-            work_item.build()
+    def build(jobs)
+      jobs.each do | job |
+        if job.is_a?(Job)
+          unless job.result
+            build(job.depends + job.include_depends)
+            job.build()
           end
          end
       end
-      work_items.map { | x |  x.result }
+      jobs.map { | x |  x.result }
     end
   end
   
@@ -339,40 +339,40 @@ module Rmk
     def initialize(readonly=false)
       @readonly = readonly
     end
-    def cache(work_item,&block)
+    def cache(job,&block)
       block.call
     end
-    def build(work_items)
-      work_items.each do | work_item |
-        if work_item.is_a?(WorkItem)
-          unless work_item.result
+    def build(jobs)
+      jobs.each do | job |
+        if job.is_a?(Job)
+          unless job.result
             rebuild = true
-            if work_item.last_result
+            if job.last_result
               rebuild = false
-              mtime = work_item.mtime
-              (work_item.sources + work_item.headers).each do | d |
+              mtime = job.mtime
+              (job.sources + job.headers).each do | d |
                 dmtime = d.respond_to?(:mtime) ? d.mtime : File.mtime(d)
                 if dmtime > mtime
-                  raise "Rebuilding #{work_item.name}(#{mtime}) because #{Tools.relative(d)}(#{dmtime}) is newer" if @readonly
+                  raise "Rebuilding #{job.name}(#{mtime}) because #{Tools.relative(d)}(#{dmtime}) is newer" if @readonly
                   rebuild = true 
                   break
                 end
               end
             else
-              raise "Rebuilding #{work_item.name} because it doesn't exist" if @readonly
+              raise "Rebuilding #{job.name} because it doesn't exist" if @readonly
             end
             if rebuild
-              cache(work_item) do
-                build(work_item.depends + work_item.include_depends)
-                 work_item.build()
+              cache(job) do
+                build(job.depends + job.include_depends)
+                 job.build()
               end
             else
-              work_item.use_last_result
+              job.use_last_result
             end 
           end
         end
       end
-      work_items.map { | x |  x.result }
+      jobs.map { | x |  x.result }
     end
   end
 
@@ -405,9 +405,9 @@ module Rmk
       raise Errno::ENOENT.new("File '#{path}' not found: #{code}") unless code == 200
       http.response
     end
-    def cache(work_item,&block)
-      sources = work_item.sources
-      sources << work_item.plan.to_s
+    def cache(job,&block)
+      sources = job.sources
+      sources << job.plan.to_s
       
       id = Digest::MD5.new
       sources.sort.each do | k |
@@ -417,18 +417,18 @@ module Rmk
       id = id.hexdigest
       result = nil
       begin
-        JSON.parse(get(File.join(work_item.name,id,"index"))).each do | entries |
+        JSON.parse(get(File.join(job.name,id,"index"))).each do | entries |
           entries.each do | hid , headers |
             found = true
             headers.each do | file , x |
               found &&= ( md5(file) == x )
             end
             if found
-              result = JSON.parse(get(File.join(work_item.name,id,hid+".json")))['result']
+              result = JSON.parse(get(File.join(job.name,id,hid+".json")))['result']
               FileUtils.mkdir_p(File.dirname(result))
-              File.open(result,'wb') { | f | f.write(get(File.join(work_item.name,id,hid+".bin"))) }
+              File.open(result,'wb') { | f | f.write(get(File.join(job.name,id,hid+".bin"))) }
               puts("GET #{result}")
-              work_item.import(result,headers)
+              job.import(result,headers)
               break
             end
           end
@@ -438,21 +438,21 @@ module Rmk
         STDERR.puts exc.message
         STDERR.puts exc.backtrace.join("\n")
       end
-      unless work_item.result
+      unless job.result
         block.call()
         headers = {}
         hid = Digest::MD5.new
-        work_item.headers.sort.each do | k |
+        job.headers.sort.each do | k |
           hid.update(k)
           x = md5(k)
           headers[k] = x
           hid.update(x)
         end
         hid = hid.hexdigest
-        if work_item.result.is_a?(String)
-          put(File.join(work_item.name,id,hid+".json"),{ 'result' => work_item.result}.to_json)
-          put(File.join(work_item.name,id,hid+".bin"),File.open(work_item.result,'rb'){ | f | f.read()})
-          put(File.join(work_item.name,id,hid+".dep"),{ hid => headers}.to_json)
+        if job.result.is_a?(String)
+          put(File.join(job.name,id,hid+".json"),{ 'result' => job.result}.to_json)
+          put(File.join(job.name,id,hid+".bin"),File.open(job.result,'rb'){ | f | f.read()})
+          put(File.join(job.name,id,hid+".dep"),{ hid => headers}.to_json)
         end
       end
     end
@@ -475,8 +475,8 @@ module Rmk
       EventMachine.run do
         Fiber.new do
           begin
-            work_items = build_file.send(@task.intern)
-            item = @policy.build(work_items)
+            jobs = build_file.send(@task.intern)
+            item = @policy.build(jobs)
             p item.result if Rmk.verbose > 0
             puts "Build OK"
           rescue Exception => exc

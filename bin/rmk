@@ -21,8 +21,8 @@ OptionParser.new do |opts|
   opts.on("-v", "--verbose", "verbose mode ") do |v|
     Rmk.verbose += 1
   end
-  opts.on("-j", "--jobs [N]", "allow N jobs at parallel") do |v|
-    Rmk::WorkItem.jobs = v.to_i
+  opts.on("-j", "--threads [N]", "allow N threads at parallel") do |v|
+    Rmk::Job.threads = v.to_i
   end
 end.parse!
 

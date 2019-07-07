@@ -73,7 +73,7 @@ module Docker
     docker_dir  = dir()
     result = []
     tar_file = File.join(build_dir,File.basename(docker_file)) + ".tgz"
-    result << work_item(File.basename(tar_file),[docker_file]) do | hidden |
+    result << job(File.basename(tar_file),[docker_file]) do | hidden |
       DockerfileParser.load_file(docker_file).each do | cmd |
         case cmd[:command]
         when "COPY", "ADD"
