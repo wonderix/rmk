@@ -68,21 +68,22 @@ module Docker
 
   include Rmk::Tools
 
-  def docker_build(options = {})
-    docker_file = file("Dockerfile")
-    docker_dir  = dir()
+  def docker_build(docker_file: "Dockerfile", docker_dir: ".", depends: [])
+    docker_dir  = File.join(dir,docker_dir)
+    docker_file  = File.join(dir,docker_file)
     result = []
     tar_file = File.join(build_dir,File.basename(docker_file)) + ".tgz"
-    result << job(File.basename(tar_file),[docker_file]) do | hidden |
+    result << job(File.basename(tar_file),[docker_file] + depends ) do | hidden |
       DockerfileParser.load_file(docker_file).each do | cmd |
         case cmd[:command]
         when "COPY", "ADD"
-          Find.find(File.join(docker_dir,cmd[:params][:src])) do |path|
-            hidden[path] = true if File.file?(path)
+          unless cmd[:params][:src].start_with?('--')
+            Find.find(File.join(docker_dir,cmd[:params][:src])) do |path|
+              hidden[path] = true if File.file?(path)
+            end
           end
         end
       end
-      p hidden
       out = system("docker build -f #{docker_file} #{docker_dir}")
       raise "Sha not found in output" unless out =~ /Successfully built ([0-9a-f]+)/
       FileUtils.mkdir_p(build_dir)
