@@ -14,6 +14,7 @@ Gem::Specification.new 'rmk', '0.1.0' do |s|
   s.add_dependency 'tee', '~> 1.0'
   s.add_dependency 'thin', '~> 1.0'
   s.add_dependency 'slim'
+  s.add_dependency 'sematic'
   s.require_path          = "lib"
   s.bindir                = "bin"
   s.license               = "LICENSE"
