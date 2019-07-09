@@ -20,8 +20,7 @@ def strings(jobs)
 end
 
 def image()
-  project("main").compile_cpp()
-  docker_build()
+  docker_push(docker_build('simple', depends: project("main").compile_cpp()))
 end
 
 def all()

@@ -71,9 +71,8 @@ module Docker
   def docker_build(name,docker_file: "Dockerfile", docker_dir: ".", depends: [], tag: 'latest', hub: '')
     docker_dir  = File.join(dir,docker_dir)
     docker_file  = File.join(dir,docker_file)
-    result = []
-    tar_file = File.join(build_dir,name + ".tgz")
-    result << job(name,[docker_file] + depends ) do | hidden |
+    sha_file = File.join(build_dir,name + ".sha")
+    job(name,[docker_file] + depends ) do | hidden |
       DockerfileParser.load_file(docker_file).each do | cmd |
         case cmd[:command]
         when "COPY", "ADD"
@@ -84,13 +83,24 @@ module Docker
           end
         end
       end
-      out = system("docker build -f #{docker_file} -t #{hub}#{name}:#{tag} #{docker_dir}")
+      tag = "#{hub}#{name}:#{tag}"
+      out = system("docker build -f #{docker_file} -t #{tag} #{docker_dir}")
       raise "Sha not found in output" unless out =~ /Successfully built ([0-9a-f]+)/
+      sha = $1
       FileUtils.mkdir_p(build_dir)
-      system("docker save -o #{tar_file} #{$1}")
-      tar_file
-    end
-    result
+      File.write(sha_file,tag)
+      sha_file
+    end.to_a
+  end
+
+  def docker_push(sha_job)
+    name = 'test'
+    job(name+ "_push",sha_job) do
+      push_file = File.join(build_dir,name + ".push")
+      system("docker push #{File.read(sha_job[0].result())}")
+      File.write(pushfile,'')
+      push_file
+    end.to_a
   end
   
 end

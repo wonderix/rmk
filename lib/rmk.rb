@@ -150,6 +150,7 @@ module Rmk
     attr_reader :name, :plan, :depends, :block, :include_depends, :file
     attr_accessor :exception
     def initialize(name,plan,depends,include_depends,&block)
+      depends = [depends] unless depends.is_a?(Array)
       @name = name
       @plan = plan
       @depends = depends
@@ -192,7 +193,7 @@ module Rmk
     def inspect()
       "<Job @name=#{@name.inspect} @dir=#{@plan.dir} @depends=#{@depends.inspect} @result=#{@result.inspect}>"
     end
-    
+        
     def mtime()
       File.mtime(@file)
     end
