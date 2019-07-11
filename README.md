@@ -20,75 +20,111 @@ rmk is a software construction tool with a mix of features of make, rake maven, 
 
 ## Installation
 
-    sudo gem install rmk
+```bash
+sudo gem install rmk
+```
 
 
 ## C++ Example
 
 
-    plugin 'gnu' # Load gnu Toolchain
-    
-    def compile_cpp()
-      cc(glob("*.cpp"),[]) # Compile all cpp files in the current directory
-    end
+```ruby
+plugin 'gnu' # Load gnu Toolchain
+
+def compile_cpp()
+  cc(glob("*.cpp"),[]) # Compile all cpp files in the current directory
+end
+```
 
 You can run this build script with
 
-    rmk compile_cpp
+```bash
+rmk compile_cpp
+```
 
 ## Java Example
 
-    plugin 'java' # Load java support
-    
-    def compile_java()
-      # compile all files in src/main/java/**/*.java and include them in one jar file named test
-      jar("test",javac(glob("src/main/java/**/*.java"),[])) 
-    end
+```ruby
+plugin 'java' # Load java support
+
+def compile_java()
+  # compile all files in src/main/java/**/*.java and include them in one jar file named test
+  jar("test",javac(glob("src/main/java/**/*.java"),[])) 
+end
+```
 
 You can run this build script with
 
-    rmk compile_java
+```bash
+rmk compile_java
+```
 
 ## Maven support
 
-    plugin 'java'  # Load java support
-    plugin 'maven' # Load maven support
+```ruby
+plugin 'java'  # Load java support
+plugin 'maven' # Load maven support
 
-    Maven.repository = "http://repo1.maven.org/maven2" # Configure maven repository
+Maven.repository = "http://repo1.maven.org/maven2" # Configure maven repository
 
-    def compile_java()
-      # compile all files in src/main/java/**/*.java with tapestry support
-      javac(glob("src/main/java/**/*.java"),mvn("org.apache.tapestry","tapestry-core","5.3.6")) 
-    end
+def compile_java()
+  # compile all files in src/main/java/**/*.java with tapestry support
+  javac(glob("src/main/java/**/*.java"),mvn("org.apache.tapestry","tapestry-core","5.3.6")) 
+end
+```
 
 ## Dependency management
 
 You can refer to build results from other directories by loading the project and calling the corresponding method.
 
-    plugin 'java'
+```ruby
+plugin 'java'
 
-    def compile_java()
-      # compile all files in src/main/java/**/*.java. Use result from directory ../lib as additional library
-      javac(glob("src/main/java/**/*.java"),project("../lib").compile_java)
-    end
+def compile_java()
+  # compile all files in src/main/java/**/*.java. Use result from directory ../lib as additional library
+  javac(glob("src/main/java/**/*.java"),project("../lib").compile_java)
+end
+```
 
+## Remote repositories
+
+It's possible to clone remote git repositories. All repositories are cloned and updated to `$HOME/.rmk/`. Currently only the master branch is supported. During every run, the repository is updated. You can either use the command line
+
+```bash
+rmk -C https://github.com/wonderix/rmk
+```
+
+or the `project` method inside a build file to do this
+
+```ruby
+plugin 'java'
+
+def compile_java()
+  # compile all files in src/main/java/**/*.java. Use result from directory ../lib as additional library
+  javac(glob("src/main/java/**/*.java"),project("https://github.com/wonderix/rmk").compile_java)
+end
+```
 
 ## Caching
 
 Start cache server
 
-    rmksrv &
-    
-    == Sinatra/1.4.3 has taken the stage on 4567 for development with backup from Thin
-    >> Thin web server (v1.5.1 codename Straight Razor)
-    >> Maximum connections set to 1024
-    >> Listening on localhost:4567, CTRL+C to stop
+```bash
+rmksrv &
+
+== Sinatra/1.4.3 has taken the stage on 4567 for development with backup from Thin
+>> Thin web server (v1.5.1 codename Straight Razor)
+>> Maximum connections set to 1024
+>> Listening on localhost:4567, CTRL+C to stop
+```
 
         
 Run build
 
-    rmk -c http://localhost:4567
-    
+```bash
+rmk -c http://localhost:4567
+```
+   
 ## Writing plugins
 
 * Put a new file in the plugin directory. The filename should be lower case
@@ -98,12 +134,14 @@ Run build
 
 The following script shows a simple example
 
-    # file abc.rb
-    module Abc
-      def hello()
-        puts "Hello"
-      end
-    end
+```ruby
+# file abc.rb
+module Abc
+  def hello()
+    puts "Hello"
+  end
+end
+```
 
 ## Writing jobs
 
@@ -113,24 +151,26 @@ The following script shows a simple example
 
 The following method extracts all strings from a given file
 
-    #include support for system command
-    include Tools
+```ruby
+#include support for system command
+include Tools
 
-    def strings(jobs)
-      # create new work item and pass all dependencies
-      # when this item needs to be rebuild the given block is called 
-      job("strings",jobs) do 
-        result = []
-        # iterate of all items
-        jobs.each do | item |
-          txt = item.result + ".txt"
-          system("strings #{item.result} > #{txt}")
-          result << txt
-        end
-        # return result from block
-        result
-      end.to_a
+def strings(jobs)
+  # create new work item and pass all dependencies
+  # when this item needs to be rebuild the given block is called 
+  job("strings",jobs) do 
+    result = []
+    # iterate of all items
+    jobs.each do | item |
+      txt = item.result + ".txt"
+      system("strings #{item.result} > #{txt}")
+      result << txt
     end
+    # return result from block
+    result
+  end.to_a
+end
+```
 
 Normally this kind of methods should be part of a plugin. You can also put this code in your build.rmk.
        
@@ -138,7 +178,7 @@ Normally this kind of methods should be part of a plugin. You can also put this 
 
 Rmk supports a simple UI. You can run 
 
-```
+```bash
 rmk -u
 ```
 
