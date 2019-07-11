@@ -5,6 +5,7 @@ rmk is a software construction tool with a mix of features of make, rake maven, 
 
 ## Features
 
+* **Fast incremental builds**
 * Build scripts are written in Ruby
 * Support for Java projects
 * Support for C++ projects
@@ -12,7 +13,7 @@ rmk is a software construction tool with a mix of features of make, rake maven, 
 * Support for maven dependencies
 * Advanced project dependencies using normal Ruby method calls
 * Support for parallel builds
-* Extremly fast (Delta build with 10000 files without changes in less than 1 second)
+* Extremely fast (Delta build with 10000 files without changes in less than 1 second)
 * Share built files in a cache
 * Cross-platform builds on Linux, Mac OS X and Windows
 
