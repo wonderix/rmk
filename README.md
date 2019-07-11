@@ -104,7 +104,7 @@ The following script shows a simple example
       end
     end
 
-## Writing work items
+## Writing jobs
 
 * Every build step must be encapsulated in a work item
 * All dependency checks are based on work items
@@ -133,4 +133,17 @@ The following method extracts all strings from a given file
 
 Normally this kind of methods should be part of a plugin. You can also put this code in your build.rmk.
        
-     
+## UI
+
+Rmk supports a simple UI. You can run 
+
+```
+rmk -u
+```
+
+And navigate to http://localhost:8081
+
+## CI-CD
+
+![](doc/Rmk.png)
+
