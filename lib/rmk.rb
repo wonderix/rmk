@@ -284,7 +284,7 @@ module Rmk
 
   class Plan
 
-    BUILD_DIR = "build"
+    BUILD_DIR = '.rmk'
 
     attr_accessor :md5
     def initialize(build_file_cache,file,md5)
