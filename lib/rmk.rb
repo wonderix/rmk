@@ -410,12 +410,14 @@ module Rmk
                 dmtime = d.respond_to?(:mtime) ? d.mtime : File.mtime(d)
                 if dmtime > mtime
                   raise "Rebuilding #{job.name}(#{mtime}) because #{Tools.relative(d)}(#{dmtime}) is newer" if @readonly
+                  puts "Rebuilding #{job.name}(#{mtime}) because #{Tools.relative(d)}(#{dmtime}) is newer" if Rmk.verbose > 0
                   rebuild = true
                   break
                 end
               end
             else
-              raise "Rebuilding #{job.name} because it doesn't exist" if @readonly
+              raise "Rebuilding #{job.name} because #{job.file} doesn't exist" if @readonly
+              puts "Rebuilding #{job.name} because #{job.file} doesn't exist" if Rmk.verbose > 0
             end
             if rebuild
               cache(job) do
