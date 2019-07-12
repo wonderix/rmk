@@ -121,7 +121,7 @@ module Rmk
       msg.to_s.gsub(/(\/[^\s:]*\/)/) { File.relative_path_from($1,Dir.getwd) + "/" }
     end
 
-    def system(cmd)
+    def system(cmd,dir: nil)
       message = Rmk.verbose > 0 ? cmd : Tools.relative(cmd)
       stringio = StringIO.new()
       puts(message)
@@ -130,7 +130,8 @@ module Rmk
         out = File.open($2,'wb')
         cmd = $1
       end
-      EventMachine.popen("sh -ce '#{cmd} 2>&1'", PipeReader,Fiber.current,out)
+      shell = dir ? "sh -ce 'cd #{dir} && #{cmd} 2>&1'" :  "sh -ce '#{cmd} 2>&1'"
+      EventMachine.popen(shell, PipeReader,Fiber.current,out)
       raise "#{cmd}\n#{stringio.string}" unless Fiber.yield == 0
       stringio.string
     end
