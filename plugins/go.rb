@@ -16,7 +16,7 @@ module Go
       ENV['GOOS'] = goos if goos
       begin
         system("go build -mod=#{mod} -o #{output} #{package}")
-      rescue
+      ensure
         ENV.delete('GOOS') if goos
       end
       output

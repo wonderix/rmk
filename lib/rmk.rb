@@ -130,7 +130,7 @@ module Rmk
         out = File.open($2,'wb')
         cmd = $1
       end
-      EventMachine.popen("sh -c '#{cmd} 2>&1'", PipeReader,Fiber.current,out)
+      EventMachine.popen("sh -ce '#{cmd} 2>&1'", PipeReader,Fiber.current,out)
       raise "#{cmd}\n#{stringio.string}" unless Fiber.yield == 0
       stringio.string
     end
