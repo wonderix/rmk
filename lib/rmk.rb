@@ -348,7 +348,7 @@ module Rmk
 
     def self.plugin(name)
       Kernel.require File.join(File.expand_path(File.dirname(File.dirname(__FILE__))), 'plugins', name + '.rb')
-      include const_get(name.capitalize)
+      include const_get(name.split('-').map { |string| string.capitalize }.join)
     end
 
     def job(name, depends, include_depends = [], &block)
