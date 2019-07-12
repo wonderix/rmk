@@ -7,7 +7,7 @@ Gem::Specification.new 'rmk', '0.1.0' do |s|
   s.homepage          = "https://github.com/wonderix/rmk"
   s.files             = `git ls-files bin lib plugins`.split("\n") + %w(README.md LICENSE)
   s.test_files        = s.files.select { |p| p =~ /^spec\/..rb/ }
-  s.extra_rdoc_files  = s.files.select { |p| p =~ /^README/ } 
+  s.extra_rdoc_files  = s.files.select { |p| p =~ /^README/ }
   s.add_dependency 'sinatra', '~> 1.3'
   s.add_dependency 'eventmachine', '~> 1.0'
   s.add_dependency 'em-http-request', '~> 1.0'

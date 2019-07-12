@@ -4,7 +4,7 @@ require 'fileutils'
 module Java
 
   include Rmk::Tools
-  
+
   def javac(files,jarfiles, options = {})
     result = job("classes",files+jarfiles) do
       classes_dir = File.join(build_dir(),"classes")
@@ -17,7 +17,7 @@ module Java
     end
     [ result ]
   end
-  
+
   def jar(name,classfiles, resourcefiles = [], options= {})
     result = job(name + ".jar",classfiles+resourcefiles) do
       lib_dir = File.join(build_dir,"lib");
@@ -39,5 +39,5 @@ module Java
     end
     [ result ]
   end
-  
+
 end

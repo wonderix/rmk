@@ -49,7 +49,7 @@ module Cpp
       return File.basename(self,".so")[3..-1]
     end
   end
-  
+
   class Include
     attr_reader :flags
     def initialize(flags)
@@ -73,15 +73,15 @@ end
 module Gnu
 
   include Rmk::Tools
-  
+
   TARGET = "i486-linux"
-  
-  
+
+
   def inc(dirs, options = {})
       return [ Cpp::Include.new(dirs.map{ | x | "-I#{x}"} ) ]
   end
 
-  def cc(files,depends, options = {}) 
+  def cc(files,depends, options = {})
     result = []
     return inc([dir],options) if files.empty?
     local_includes = files.map{ | x | "-I" + File.dirname(x)}.uniq
@@ -89,7 +89,7 @@ module Gnu
       header = []
       basename, suffix  = File.basename(cpp.to_s).split(".")
       result << job(basename + ".o",[cpp],depends) do | hidden |
-        flags = [] 
+        flags = []
         depends.each do | d |
           d = d.result
           flags.concat(d.flags) if d.respond_to?(:flags)
@@ -118,8 +118,8 @@ module Gnu
     end
     result
   end
-  
-  def ar(name,depends, options = {}) 
+
+  def ar(name,depends, options = {})
     result = job("lib" + name + ".a",depends) do
       target_dir = File.join(build_dir,TARGET)
       FileUtils.mkdir_p(target_dir)
@@ -139,9 +139,9 @@ module Gnu
     end
     [ result ]
   end
-  
-  def ld(name,depends, options = {}) 
-    result = job(name,depends) do 
+
+  def ld(name,depends, options = {})
+    result = job(name,depends) do
       target_dir = File.join(build_dir,TARGET)
       FileUtils.mkdir_p(target_dir)
       ofile = File.join(target_dir,name)
@@ -167,10 +167,10 @@ module Gnu
     end
     [ result ]
   end
-  
-  def ld_shared(name,depends, options = {}) 
+
+  def ld_shared(name,depends, options = {})
     name = "lib" + name + ".so"
-    result = job(name,depends) do 
+    result = job(name,depends) do
       target_dir = File.join(build_dir,TARGET)
       FileUtils.mkdir_p(target_dir)
       libflags = []

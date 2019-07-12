@@ -49,7 +49,7 @@ plugin 'java' # Load java support
 
 def compile_java()
   # compile all files in src/main/java/**/*.java and include them in one jar file named test
-  jar("test",javac(glob("src/main/java/**/*.java"),[])) 
+  jar("test",javac(glob("src/main/java/**/*.java"),[]))
 end
 ```
 
@@ -69,7 +69,7 @@ Maven.repository = "http://repo1.maven.org/maven2" # Configure maven repository
 
 def compile_java()
   # compile all files in src/main/java/**/*.java with tapestry support
-  javac(glob("src/main/java/**/*.java"),mvn("org.apache.tapestry","tapestry-core","5.3.6")) 
+  javac(glob("src/main/java/**/*.java"),mvn("org.apache.tapestry","tapestry-core","5.3.6"))
 end
 ```
 
@@ -118,13 +118,13 @@ rmksrv &
 >> Listening on localhost:4567, CTRL+C to stop
 ```
 
-        
+
 Run build
 
 ```bash
 rmk -c http://localhost:4567
 ```
-   
+
 ## Writing plugins
 
 * Put a new file in the plugin directory. The filename should be lower case
@@ -157,8 +157,8 @@ include Tools
 
 def strings(jobs)
   # create new work item and pass all dependencies
-  # when this item needs to be rebuild the given block is called 
-  job("strings",jobs) do 
+  # when this item needs to be rebuild the given block is called
+  job("strings",jobs) do
     result = []
     # iterate of all items
     jobs.each do | item |
@@ -173,10 +173,10 @@ end
 ```
 
 Normally this kind of methods should be part of a plugin. You can also put this code in your build.rmk.
-       
+
 ## UI
 
-Rmk supports a simple UI. You can run 
+Rmk supports a simple UI. You can run
 
 ```bash
 rmk -u

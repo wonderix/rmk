@@ -71,36 +71,32 @@ module Docker
   def docker_build(name,docker_file: "Dockerfile", docker_dir: ".", depends: [], tag: 'latest', hub: '')
     docker_dir  = File.join(dir,docker_dir)
     docker_file  = File.join(dir,docker_file)
-    sha_file = File.join(build_dir,name + ".sha")
-    job(name,[docker_file] + depends ) do | hidden |
+    job("#{hub}#{name}",[docker_file] + depends ) do | hidden |
       DockerfileParser.load_file(docker_file).each do | cmd |
         case cmd[:command]
         when "COPY", "ADD"
           unless cmd[:params][:src].start_with?('--')
-            Find.find(File.join(docker_dir,cmd[:params][:src])) do |path|
-              hidden[path] = true if File.file?(path)
+            begin
+              Find.find(File.join(docker_dir,cmd[:params][:src])) do |path|
+                hidden[path] = true if File.file?(path)
+              end
+            rescue Exception => exc
+              raise "Unable to read '#{cmd[:params][:src]}' required for #{docker_file}: #{exc}"
             end
           end
         end
       end
-      tag = "#{hub}#{name}:#{tag}"
-      out = system("docker build -f #{docker_file} -t #{tag} #{docker_dir}")
-      raise "Sha not found in output" unless out =~ /Successfully built ([0-9a-f]+)/
-      sha = $1
-      FileUtils.mkdir_p(build_dir)
-      File.write(sha_file,tag)
-      sha_file
+      docker_tag = "#{hub}#{name}:#{tag}"
+      system("docker build -f #{docker_file} -t #{docker_tag}  #{docker_dir}")
+      docker_tag
     end.to_a
   end
 
-  def docker_push(sha_job)
-    name = 'test'
-    job(name+ "_push",sha_job) do
-      push_file = File.join(build_dir,name + ".push")
-      system("docker push #{File.read(sha_job[0].result())}")
-      File.write(pushfile,'')
-      push_file
+  def docker_push(depends)
+    image = depends.first
+    job("docker/#{image.name}",depends) do
+      system("docker push #{image.result()}")
     end.to_a
   end
-  
+
 end

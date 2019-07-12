@@ -91,7 +91,7 @@ module Rmk
       @name = name
       @result = nil
       current = Fiber.current
-      Fiber.new do 
+      Fiber.new do
         begin
           @result = block.call() || true
         rescue Exception => exc
@@ -106,7 +106,7 @@ module Rmk
       "Future:#{@name}"
     end
     def result()
-      while @result.nil? 
+      while @result.nil?
         Fiber.yield
       end
       raise @result if @result.is_a?(Exception)
@@ -116,7 +116,7 @@ module Rmk
 
 
   module Tools
-  
+
     def self.relative(msg)
       msg.to_s.gsub(/(\/[^\s:]*\/)/) { File.relative_path_from($1,Dir.getwd) + "/" }
     end
@@ -142,11 +142,11 @@ module Rmk
     def self.threads=(value)
       @threads = value
     end
-    
+
     def self.threads()
       @threads || 100
     end
-    
+
     attr_reader :name, :plan, :depends, :block, :include_depends, :file
     attr_accessor :exception
     def initialize(name,plan,depends,include_depends,&block)
@@ -163,7 +163,7 @@ module Rmk
       sources.each { | s | md5.update(s.to_s); }
       @file = File.join(plan.build_dir,"cache/#{@name}/#{md5.hexdigest}")
     end
-    
+
     def id()
       md5 = Digest::MD5.new
       md5.update(@plan.md5)
@@ -171,7 +171,7 @@ module Rmk
       md5.update(@name)
       md5.hexdigest
     end
-      
+
     def last_result()
       unless @last_result
         begin
@@ -185,19 +185,19 @@ module Rmk
       end
       @last_result
     end
-    
+
     def use_last_result()
       @result = @last_result
     end
-    
+
     def inspect()
       "<Job @name=#{@name.inspect} @dir=#{@plan.dir} @depends=#{@depends.inspect} @result=#{@result.inspect}>"
     end
-        
+
     def mtime()
       File.mtime(@file)
     end
-    
+
     def import(result,headers)
       @result = result
       @headers = {}
@@ -206,14 +206,14 @@ module Rmk
       end
       save(@result)
     end
-    
+
     def save(result)
       FileUtils.mkdir_p(File.dirname(@file))
       File.open(@file,"wb") { | f | Marshal.dump(result,f) }
       File.open(@file +".dep","wb") { | f | Marshal.dump(@headers,f) } unless @headers.empty?
       result
     end
-    
+
     def result()
       if @result.is_a?(Future)
         begin
@@ -226,7 +226,7 @@ module Rmk
       end
       @result
     end
-    
+
     def build(policy)
       begin
         policy.build(self.depends + self.include_depends)
@@ -236,13 +236,14 @@ module Rmk
       end
       @result = Future.new(@name) do
         headers()
+        self.depends.map{|x| x.result()}
         result = @block.call(@headers)
         save(result)
       end
       return result() if Job.threads == 1
       @result
     end
-    
+
     def sources(result = nil)
       unless @sources
         @sources  = {}
@@ -256,7 +257,7 @@ module Rmk
       end
       result ? result.merge!(@sources)  : @sources.values
     end
-    
+
     def headers(result = nil)
       unless @headers
         @headers  = {}
@@ -273,11 +274,11 @@ module Rmk
       [ self ]
     end
   end
-    
+
   class Plan
 
     BUILD_DIR = "build"
-    
+
     attr_accessor :md5
     def initialize(build_file_cache,file,md5)
       @build_file_cache = build_file_cache
@@ -285,48 +286,48 @@ module Rmk
       @dir = File.dirname(file)
       @md5 = md5
     end
-    
+
     def self.file=(value)
       @dir = File.dirname(value)
     end
-    
+
     def project(file)
       @build_file_cache.load(file,@dir)
     end
-    
+
     def self.plugin(name)
       Kernel.require File.join(File.expand_path(File.dirname(File.dirname(__FILE__))),"plugins",name + ".rb")
       include const_get(name.capitalize)
     end
-   
+
     def job(name,depends, include_depends = [], &block)
       return Job.new(name,self,depends,include_depends,&block)
     end
-    
+
     def glob(pattern)
       Dir.glob(File.join(@dir,pattern))
     end
-    
+
     def dir()
       @dir
     end
-    
+
     def build_dir()
       File.join(@dir,BUILD_DIR)
     end
-    
+
     def file(name)
       return File.join(@dir,name) if name.is_a?(String)
       name.to_a.map{ | x | File.join(@dir,x) }
     end
-    
+
     def to_s()
       @file
     end
   end
 
   class PlanCache
-    include Tools 
+    include Tools
     def initialize()
       @cache = Hash.new
     end
@@ -363,7 +364,7 @@ module Rmk
     end
 
   end
-  
+
   class AlwaysBuildPolicy
     def build(jobs)
       jobs.each do | job |
@@ -376,7 +377,7 @@ module Rmk
       jobs.map { | x |  x.result }
     end
   end
-  
+
   class ModificationTimeBuildPolicy
     def initialize(readonly=false)
       @readonly = readonly
@@ -396,7 +397,7 @@ module Rmk
                 dmtime = d.respond_to?(:mtime) ? d.mtime : File.mtime(d)
                 if dmtime > mtime
                   raise "Rebuilding #{job.name}(#{mtime}) because #{Tools.relative(d)}(#{dmtime}) is newer" if @readonly
-                  rebuild = true 
+                  rebuild = true
                   break
                 end
               end
@@ -409,7 +410,7 @@ module Rmk
               end
             else
               job.use_last_result
-            end 
+            end
           end
         end
       end
@@ -449,7 +450,7 @@ module Rmk
     def cache(job,&block)
       sources = job.sources
       sources << job.plan.to_s
-      
+
       id = Digest::MD5.new
       sources.sort.each do | k |
         id.update(k)
@@ -523,7 +524,7 @@ module Rmk
             puts "Build OK"
           rescue Exception => exc
             STDERR.puts exc.message
-            # STDERR.puts exc.backtrace.join("\n")  if Rmk.verbose > 0
+            STDERR.puts exc.backtrace.join("\n")  if Rmk.verbose > 0
             puts "Build Failed"
             result = 1
           end

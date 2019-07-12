@@ -5,8 +5,8 @@ plugin 'docker'
 
 def strings(jobs)
   # create new work item and pass all dependencies
-  # when this item needs to be rebuild the given block is called 
-  job("strings",jobs) do 
+  # when this item needs to be rebuild the given block is called
+  job("strings",jobs) do
     result = []
     # iterate of all items
     jobs.each do | item |

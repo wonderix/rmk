@@ -10,7 +10,7 @@ module Maven
 
 
   class MetadataListener < XML::SAX::Document
-  
+
     attr_reader :version
     def initialize()
       @version = ""
@@ -33,12 +33,12 @@ module Maven
      reset()
      @skip_invalid_version = true
     end
-    
+
     def dependency_callback(&block)
       @dependency_callback = block
       @stack = []
     end
-    
+
     def reset()
       @current = ""
       @group = ""
@@ -47,15 +47,15 @@ module Maven
       @scope = "compile"
       @optional = ""
     end
-    
+
     def start_element(element, attributes)
       @current = ""
       @stack.push(element)
     end
-    
+
     def end_element(element)
       @stack.pop
-      if @stack == %w(project dependencies dependency) 
+      if @stack == %w(project dependencies dependency)
         case element
         when "groupId"
           @group = @current
@@ -78,7 +78,7 @@ module Maven
       @current += text
     end
   end
-  
+
   def mvn_cache(artifact)
     cache = "#{ENV['HOME']}/.m2/repository/#{artifact}"
     return cache if File.readable?(cache)
@@ -96,10 +96,10 @@ module Maven
       raise "Can't download artifact \"#{artifact}\" form #{@@repositroy}: #{exc.message}"
     end
   end
-  
+
   def mvn(group_id,artifact_id,version)
     artifact_dir = "#{group_id.tr(".","/")}/#{artifact_id}/#{version}"
-      
+
     begin
       if version[-8,8] == "SNAPSHOT"
         listener = MetadataListener.new
@@ -119,11 +119,11 @@ module Maven
       raise "Can't download dependencies of \"#{artifact}\" : #{exc.message}"
     end
   end
-  
+
   def self.repositroy()
     @@repositroy.to_s
   end
-  
+
   def self.repository=(value)
     @@repositroy = URI(value)
   end
