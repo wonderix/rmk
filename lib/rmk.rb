@@ -176,11 +176,18 @@ module Rmk
       unless @last_result
         begin
           @last_result = File.open(@file,"rb") { | f | Marshal.load(f) }
-          @headers = File.open(@file +".dep","rb") { | f | Marshal.load(f) }
         rescue Errno::ENOENT
         rescue Exception
-          puts "Removing #{@file}" if Rmk.verbose > 0
+          puts "Removing #{@file}"
           File.delete(@file) if File.readable?(@file)
+        end
+        begin
+          @headers = File.open(@file +".dep","rb") { | f | Marshal.load(f) }
+        rescue Errno::ENOENT
+          @headers = nil
+        rescue Exception
+          puts "Removing #{@file+".dep"}"
+          File.delete(@file+".dep") if File.readable?(@file+".dep")
         end
       end
       @last_result
@@ -210,7 +217,7 @@ module Rmk
     def save(result)
       FileUtils.mkdir_p(File.dirname(@file))
       File.open(@file,"wb") { | f | Marshal.dump(result,f) }
-      File.open(@file +".dep","wb") { | f | Marshal.dump(@headers,f) } unless @headers.empty?
+      File.open(@file +".dep","wb") { | f | Marshal.dump(@headers,f) } unless @headers || @headers.empty?
       result
     end
 
