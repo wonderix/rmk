@@ -88,7 +88,7 @@ end
 
 ## Remote repositories
 
-It's possible to clone remote git repositories. All repositories are cloned and updated to `$HOME/.rmk/`. Currently only the master branch is supported. During every run, the repository is updated. You can either use the command line
+It's possible to clone remote git repositories. All repositories are cloned and updated to `$HOME/.rmk/`. You can specify a branch by using a fragment in the URI. During every run, the repository is updated. You can either use the command line
 
 ```bash
 rmk -C https://github.com/wonderix/rmk

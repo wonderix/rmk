@@ -341,23 +341,28 @@ module Rmk
 
     def load(file, dir = ".")
       case dir
-      when /git@([^:]*):(.*)\/(.*)/
-        dir = git_pull(dir,File.join(RMK_DIR,$3.sub(/\.git$/,"")))
+      when /git@([^:]*):(.*)\/([^#]*)(#.*|)/
+        fragment = $4
+        path = $3.sub(/\.git$/,"")
+        dir = git_pull(dir,File.join(RMK_DIR,$3.sub(/\.git$/,"")), fragment.empty? ? "master" : fragment[1..-1])
       when /https{0,1}:\/\//
         uri = URI.parse(dir)
-        dir = git_pull(dir,File.join(RMK_DIR,File.basename(uri.path).sub(/\.git$/,"")))
+        branch = uri.fragment || "master"
+        uri.fragment = nil
+        dir = git_pull(uri.to_s,File.join(RMK_DIR,File.basename(uri.path).sub(/\.git$/,"")),branch)
       end
       file = File.expand_path(File.join(dir,file))
       file = File.join(file,"build.rmk") if File.directory?(file)
       @cache[file] ||= load_inner(file)
     end
 
-    def git_pull(remote,local)
+    def git_pull(remote,local,branch)
       if File.directory?(local)
         system("git  -C #{local} pull")
+        system("git  -C #{local} checkout #{branch}")
       else
         FileUtils.mkdir_p(File.dirname(local))
-        system("git clone --single-branch --branch master #{remote} #{local}")
+        system("git clone --branch #{branch} #{remote} #{local}")
       end
       return local
     end
