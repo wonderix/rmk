@@ -217,7 +217,7 @@ module Rmk
     def save(result)
       FileUtils.mkdir_p(File.dirname(@file))
       File.open(@file,"wb") { | f | Marshal.dump(result,f) }
-      File.open(@file +".dep","wb") { | f | Marshal.dump(@headers,f) } unless @headers || @headers.empty?
+      File.open(@file +".dep","wb") { | f | Marshal.dump(@headers,f) } if @headers && !@headers.empty?
       result
     end
 

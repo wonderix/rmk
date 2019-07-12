@@ -54,7 +54,7 @@ module Go
   end
 
   def go_files(package,include_tests = false)
-    result =  package.end_with?("/...")  ? Dir.glob(File.join(dir,"#{package.sub("...","")}**/*.go")) : Dir.glob(File.join(dir,"#{package}/*.go"))
+    result =  package.end_with?("/...")  ? Dir.glob("#{package.sub("...","")}**/*.go") : Dir.glob("#{package}/*.go")
     result = result.delete_if{|x| x.end_with?("_test.go")} unless include_tests
     return result
   end
