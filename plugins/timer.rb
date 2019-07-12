@@ -23,7 +23,7 @@ module Timer
 
   def timer(interval, base: nil)
     base ||= Time.at(0)
-    return TimerJob.new(interval, base)
+    return [ TimerJob.new(interval, base) ]
   end
 
 end
