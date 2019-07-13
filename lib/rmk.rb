@@ -9,6 +9,7 @@ require 'json'
 require 'stringio'
 require 'uri'
 require 'open3'
+require 'yaml'
 
 
 
@@ -384,12 +385,13 @@ module Rmk
       @cache = Hash.new
     end
 
+
     def load(file, dir = ".")
       case dir
       when /git@([^:]*):(.*)\/([^#]*)(#.*|)/
         fragment = $4
         path = $3.sub(/\.git$/,"")
-        dir = git_pull(dir,File.join(RMK_DIR,$3.sub(/\.git$/,"")), fragment.empty? ? "master" : fragment[1..-1])
+        dir = git_pull(dir,File.join(RMK_DIR,path), fragment.empty? ? "master" : fragment[1..-1])
       when /https{0,1}:\/\//
         uri = URI.parse(dir)
         branch = uri.fragment || "master"
@@ -402,12 +404,28 @@ module Rmk
     end
 
     def git_pull(remote,local,branch)
+      info_file = local + ".yaml"
+      info = {}
       if File.directory?(local)
-        system("git  -C #{local} pull")
-        system("git  -C #{local} checkout #{branch}")
+        if File.readable?(info_file)
+          info = YAML.load(File.read(info_file))
+          if info[:branch] != branch
+            system("git checkout #{branch}",chdir: local)
+            info[:branch] = branch
+            File.write(info_file,YAML.dump(info))
+          else
+            system("git pull",chdir: local)
+          end
+        else
+          system("git checkout #{branch}",chdir: local)
+          info[:branch] = branch
+          File.write(info_file,YAML.dump(info))
+        end
       else
         FileUtils.mkdir_p(File.dirname(local))
         system("git clone --branch #{branch} #{remote} #{local}")
+        info[:branch] = branch
+        File.write(info_file,YAML.dump(info))
       end
       return local
     end
