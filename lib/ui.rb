@@ -72,27 +72,21 @@ module Rmk
   end
 
 
-  class ResultScanner
-    def initialize(controller)
-    end
-
-
-  end
-
   class App < Sinatra::Base
 
-    def initialize(controller)
+    def initialize(controller,build_interval)
       super()
       @controller = controller
+      @build_interval = build_interval
       build()
-      EventMachine.add_periodic_timer(5) do
-        build()
-      end
     end
 
     def build()
       @controller.run do | jobs |
         @root_build_results = RootBuildResult.new(@controller,jobs)
+        EventMachine.add_timer(@build_interval) do
+          build()
+        end
       end
     end
 
@@ -114,11 +108,11 @@ module Rmk
     get "/favicon.ico" do
     end
 
-    def self.run(controller)
+    def self.run(controller,build_interval)
 
       EventMachine.run do
 
-        web_app = App.new(controller)
+        web_app = App.new(controller,build_interval)
 
         dispatch = Rack::Builder.app do
           map '/' do

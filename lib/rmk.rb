@@ -107,7 +107,10 @@ module Rmk
     end
 
     def notify_readable()
-      @out.write(@io.read())
+      begin
+        @out.write(@io.readpartial(1024))
+      rescue EOFError
+      end
     end
   end
 
@@ -149,7 +152,7 @@ module Rmk
       puts(message)
       exception_buffer = StringIO.new()
       opts = {}
-      opts[:chdir] = chdir if chdir
+      opts[:chdir] = chdir ? chdir : dir()
       popen3_inner(cmd,**opts) do | stdin, stdout, stderr, wait_thr |
         EventMachine.watch_process(wait_thr[:pid], ProcessWatcher, Fiber.current, wait_thr)
         connout = EventMachine.watch(stdout, Popen3Reader, out)

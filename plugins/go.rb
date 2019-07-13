@@ -15,7 +15,7 @@ module Go
       output = File.join(build_dir,name)
       ENV['GOOS'] = goos if goos
       begin
-        system("go build -mod=#{mod} -o #{output} #{package}",chdir: dir)
+        system("go build -mod=#{mod} -o #{output} #{package}")
       ensure
         ENV.delete('GOOS') if goos
       end
@@ -36,7 +36,7 @@ module Go
     result = []
     result << job("go/coverage",go_files(package,true)) do | hidden |
       output = File.join(build_dir,"coverage")
-      coverage = StringIO.new(system("go test -cover -mod=#{mod} #{package}",chdir: dir))
+      coverage = StringIO.new(system("go test -cover -mod=#{mod} #{package}"))
       while line = coverage.gets()
         if line =~ /ok\s+(\S+)\s+.*coverage:\s+(\d+\.\d+)%/
           percent = $2.to_f

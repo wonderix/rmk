@@ -2,6 +2,10 @@ require_relative '../lib/rmk.rb'
 
 include Rmk::Tools
 
+def dir()
+  File.dirname(__FILE__)
+end
+
 describe File, "#relative_path_from" do
   it "should caclulate correct path" do
     rel  = File.relative_path_from("/home/kramer/sources/eddi/EDDI3/common/","/home/kramer/sources/eddi/EDDI3/PIRcpt")

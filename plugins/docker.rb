@@ -96,6 +96,7 @@ module Docker
     image = depends.first
     job("docker/#{image.name}",depends) do
       system("docker push #{image.result()}")
+      image.name
     end.to_a
   end
 

@@ -9,5 +9,5 @@ RUN apt-get update && \
       curl
 
 WORKDIR /app
-COPY rmk-0.1.0.gem /app/
+COPY .rmk/rmk-0.1.0.gem /app/
 RUN gem install rmk-0.1.0.gem

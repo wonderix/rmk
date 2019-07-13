@@ -20,7 +20,7 @@ def strings(jobs)
 end
 
 def image()
-  docker_push(docker_build('simple', depends: project("main").compile_cpp()))
+  docker_push(docker_build('example', hub: 'wonderix/', depends: project("main").compile_cpp()))
 end
 
 def all()
