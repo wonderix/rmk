@@ -11,7 +11,6 @@ Gem::Specification.new 'rmk', '0.1.0' do |s|
   s.add_dependency 'sinatra', '~> 1.3'
   s.add_dependency 'eventmachine', '~> 1.0'
   s.add_dependency 'em-http-request', '~> 1.0'
-  s.add_dependency 'tee', '~> 1.0'
   s.add_dependency 'thin', '~> 1.0'
   s.add_dependency 'slim'
   s.add_dependency 'semantic'

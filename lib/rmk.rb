@@ -7,8 +7,8 @@ require 'optparse'
 require 'em-http-request'
 require 'json'
 require 'stringio'
-require 'tee'
 require 'uri'
+require 'open3'
 
 
 
@@ -72,20 +72,6 @@ module Rmk
     end
   end
 
-  module PipeReader
-    def initialize(fiber,out)
-      @fiber = fiber
-      @out = out
-    end
-    def receive_data(data)
-      @out.write(data)
-    end
-    def unbind
-      @out.close if @out != STDOUT
-      @fiber.resume get_status.exitstatus
-    end
-  end
-
   class Future
     def initialize(name,&block)
       @name = name
@@ -114,6 +100,36 @@ module Rmk
     end
   end
 
+  module Popen3Reader
+
+    def initialize(out)
+      @out = out
+    end
+
+    def notify_readable()
+      @out.write(@io.read())
+    end
+  end
+
+  class Tee
+    def initialize(*out)
+      @out = out
+    end
+    def write(data)
+      @out.each {|o| o.write(data) }
+    end
+  end
+
+  module ProcessWatcher
+    def initialize(fiber,wait_thr)
+      @fiber = fiber
+      @wait_thr = wait_thr
+    end
+
+    def process_exited
+      @fiber.resume @wait_thr.value
+    end
+  end
 
   module Tools
 
@@ -121,19 +137,44 @@ module Rmk
       msg.to_s.gsub(/(\/[^\s:]*\/)/) { File.relative_path_from($1,Dir.getwd) + "/" }
     end
 
-    def system(cmd,dir: nil)
-      message = Rmk.verbose > 0 ? cmd : Tools.relative(cmd)
-      stringio = StringIO.new()
+    def system(cmd,chdir: nil)
+      out = StringIO.new()
+      popen3(cmd,out: Tee.new(out,$stdout), err: Tee.new(out,$stderr), chdir: chdir)
+      out.string
+    end
+
+    def popen3(cmd,out: $stdout, err: $stderr, chdir: nil, stdin_data: nil )
+      cmd_string = cmd.is_a?(Array) ? cmd.join(' ') : cmd
+      message = Rmk.verbose > 0 ? cmd_string : Tools.relative(cmd_string)
       puts(message)
-      out = Tee.open(stringio)
-      if cmd =~ /(.*)\s*>\s*(\S*)$/
-        out = File.open($2,'wb')
-        cmd = $1
+      exception_buffer = StringIO.new()
+      opts = {}
+      opts[:chdir] = chdir if chdir
+      popen3_inner(cmd,**opts) do | stdin, stdout, stderr, wait_thr |
+        EventMachine.watch_process(wait_thr[:pid], ProcessWatcher, Fiber.current, wait_thr)
+        connout = EventMachine.watch(stdout, Popen3Reader, out)
+        connerr = EventMachine.watch(stderr, Popen3Reader, Tee.new(err,exception_buffer))
+        begin
+          if stdin_data
+            stdin.write(stdin_data)
+            stdin.close()
+          end
+          connout.notify_readable = true
+          connerr.notify_readable = true
+          raise "#{cmd_string}\n#{exception_buffer.string}" unless Fiber.yield == 0
+         ensure
+           connout.detach()
+           connerr.detach()
+         end
       end
-      shell = dir ? "sh -ce 'cd #{dir} && #{cmd} 2>&1'" :  "sh -ce '#{cmd} 2>&1'"
-      EventMachine.popen(shell, PipeReader,Fiber.current,out)
-      raise "#{cmd}\n#{stringio.string}" unless Fiber.yield == 0
-      stringio.string
+    end
+
+    def popen3_inner(cmd,opts,&block)
+      if cmd.is_a?(Array)
+        Open3.popen3({},*cmd,opts,&block)
+      else
+        Open3.popen3(cmd,opts,&block)
+      end
     end
   end
 
@@ -515,6 +556,8 @@ module Rmk
     end
   end
 
+
+  EventMachine.kqueue=true
 
   class Controller
     attr_accessor :dir, :policy, :task
