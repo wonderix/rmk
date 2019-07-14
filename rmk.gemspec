@@ -8,10 +8,11 @@ Gem::Specification.new 'rmk', '0.1.0' do |s|
   s.files             = `git ls-files bin lib plugins`.split("\n") + %w(README.md LICENSE)
   s.test_files        = s.files.select { |p| p =~ /^spec\/..rb/ }
   s.extra_rdoc_files  = s.files.select { |p| p =~ /^README/ }
-  s.add_dependency 'sinatra', '~> 1.4'
-  s.add_dependency 'eventmachine', '~> 1.0'
-  s.add_dependency 'em-http-request', '~> 1.0'
-  s.add_dependency 'thin', '~> 1.0'
+  s.add_dependency 'sinatra', '~> 2.0'
+  s.add_dependency 'sinatra-contrib', '~> 2.0'
+  s.add_dependency 'eventmachine', '~> 1.2'
+  s.add_dependency 'em-http-request', '~> 1.1'
+  s.add_dependency 'thin', '~> 1.7'
   s.add_dependency 'slim', '~> 4.0'
   s.add_dependency 'semantic', '~> 1.6'
   s.require_path          = "lib"

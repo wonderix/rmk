@@ -1,4 +1,5 @@
 require 'sinatra/base'
+require 'sinatra/streaming'
 require 'thin'
 require "slim"
 
@@ -74,16 +75,21 @@ module Rmk
 
   class App < Sinatra::Base
 
+    helpers Sinatra::Streaming
+
     def initialize(controller,build_interval)
       super()
       @controller = controller
       @build_interval = build_interval
+      @connections = []
       build()
     end
 
     def build()
+      @connections.each {|c| c << "data: true\n\n"}
       @controller.run do | jobs |
         @root_build_results = RootBuildResult.new(@controller,jobs)
+        @connections.each {|c| c << "data: false\n\n"}
         EventMachine.add_timer(@build_interval) do
           build()
         end
@@ -106,6 +112,15 @@ module Rmk
     end
 
     get "/favicon.ico" do
+    end
+
+    get '/status', provides: 'text/event-stream' do
+      stream(:keep_open) do |out|
+        @connections << out
+
+        # purge dead connections
+        @connections.reject!(&:closed?)
+      end
     end
 
     def self.run(controller,build_interval)

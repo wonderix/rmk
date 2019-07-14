@@ -9,23 +9,9 @@ html(lang='en')
   body
     nav.blue.darken-2
       .nav-wrapper
-        a.brand-logo href="#!"  Ruby make
-        a.button-collapse data-activates="mobile-demo" href="#"
-          i.mdi-navigation-menu
-        ul.right.hide-on-med-and-down
-          li
-            a href="#"  Link1
-          li
-            a href="#"  Link2
-          li
-            a href="#"  Link3
-        ul#mobile-demo.side-nav
-          li
-            a href="#"  Link1
-          li
-            a href="#"  Link2
-          li
-            a href="#"  Link3
+        a.brand-logo.left href="#!"  Ruby make
+        div.right
+          i(class="fa fa-cog" id="cog" style="font-size: 200%; margin-right:20px")
     #index-banner.section.no-pad-bot.gray.lighten-5
       .container
         br/
@@ -36,3 +22,13 @@ html(lang='en')
     footer.page-footer.blue.darken-3
       .footer-copyright
         .container
+    javascript:
+      var serverSentEvent = new EventSource('/status');
+      var cog = document.getElementById("cog");
+      serverSentEvent.onmessage = function(e) {
+        if ( e.data == "true" ) {
+          cog.classList.add("fa-spin")
+        } else {
+          location.reload();
+        }
+      }
