@@ -11,11 +11,13 @@ module Go
 
   def go_build(name,package, mod: "readonly", depends: [], goos: nil)
     name = goos ? File.join(goos,name) : name
-    job("go/" + name,go_files(package) + depends ) do | hidden |
+    files = go_files(package)
+    job("go/" + name,files + depends ) do | hidden |
       output = File.join(build_dir,name)
       ENV['GOOS'] = goos if goos
       begin
         system("go build -mod=#{mod} -o #{output} #{package}")
+        go_hidden(files,package,hidden)
       ensure
         ENV.delete('GOOS') if goos
       end
@@ -34,7 +36,8 @@ module Go
 
   def go_coverage(package,limits, mod: "readonly")
     result = []
-    result << job("go/coverage",go_files(package,true)) do | hidden |
+    files = go_files(package,true)
+    result << job("go/coverage",files) do | hidden |
       output = File.join(build_dir,"coverage")
       coverage = StringIO.new(system("go test -cover -mod=#{mod} #{package}"))
       while line = coverage.gets()
@@ -48,15 +51,30 @@ module Go
           end
         end
       end
+      go_hidden(files,package,hidden)
       output
     end
     result
   end
 
+
+  private
+
   def go_files(package,include_tests = false)
     result =  package.end_with?("/...")  ? Dir.glob("#{package.sub("...","")}**/*.go") : Dir.glob("#{package}/*.go")
     result = result.delete_if{|x| x.end_with?("_test.go")} unless include_tests
     return result
+  end
+
+  def go_hidden(go_files,package,hidden)
+    path, dir = capture2("go list -m -f '{{ .Path }} {{ .Dir }}'").split(/\s+/)
+    known_dependencies = go_files.map{|f| [ File.dirname(f).sub(dir,path), true ] }.to_h
+    capture2(%q(go list -f '{{ join .Deps  "\n"}}' ) + package).split("\n").each do | dep |
+      if dep.start_with?(path) && !known_dependencies.include?(dep)
+        known_dependencies[dep] = true
+        Dir.glob("#{dep.sub(path,dir)}/*.go").each { |g| hidden[g] = true}
+      end
+    end
   end
 
 end

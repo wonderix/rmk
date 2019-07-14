@@ -2,7 +2,6 @@
 plugin 'java'
 plugin 'maven'
 plugin 'gnu'
-plugin 'go'
 
 
 Maven.repository = "http://repo1.maven.org/maven2"
@@ -17,6 +16,3 @@ def compile_java()
 end
 
 
-def compile_go()
-  go_build("main",".", mod: '')
-end

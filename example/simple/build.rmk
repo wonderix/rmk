@@ -2,6 +2,7 @@
 #include support for system command
 include Tools
 plugin 'docker'
+plugin 'go'
 
 def strings(jobs)
   # create new work item and pass all dependencies
@@ -24,5 +25,9 @@ def image()
 end
 
 def all()
-  strings(project("main").compile_cpp()+ project("main").compile_go()) + project("main").compile_java() + image()
+  strings(project("main").compile_cpp()+ compile_go()) + project("main").compile_java() + image()
+end
+
+def compile_go()
+  go_build("main",".")
 end

@@ -143,14 +143,20 @@ module Rmk
 
     def system(cmd,chdir: nil)
       out = StringIO.new()
-      popen3(cmd,out: Tee.new(out,$stdout), err: Tee.new(out,$stderr), chdir: chdir)
+      popen3(cmd,out: Tee.new(out,$stdout), chdir: chdir)
       out.string
     end
 
-    def popen3(cmd,out: $stdout, err: $stderr, chdir: nil, stdin_data: nil )
+    def capture2(cmd,chdir: nil, trace: false)
+      out = StringIO.new()
+      popen3(cmd,out: out, chdir: chdir, trace: trace)
+      out.string
+    end
+
+    def popen3(cmd,out: $stdout, err: $stderr, chdir: nil, stdin_data: nil, trace: true )
       cmd_string = cmd.is_a?(Array) ? cmd.join(' ') : cmd
       message = Rmk.verbose > 0 ? cmd_string : Tools.relative(cmd_string)
-      puts(message)
+      puts(message) if trace
       exception_buffer = StringIO.new()
       opts = {}
       opts[:chdir] = chdir ? chdir : dir()
