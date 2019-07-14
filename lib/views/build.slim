@@ -9,7 +9,7 @@ h2
 ul
   - @build_result.depends.each do |build_result|
     li
-      a(href=build_result.id style="color: #{build_result.exception ? 'red' : 'green'}")
+      a(href=url("/build/#{build_result.id}") style="color: #{build_result.exception ? 'red' : 'green'}")
         span( style="color: #{build_result.exception ? 'red' : 'green'}")= build_result.name
         span(style ="padding-left: 10px; font-size: 80%")= build_result.dir
 
