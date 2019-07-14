@@ -186,5 +186,29 @@ And navigate to http://localhost:8081
 
 ## CI-CD
 
+You can run a central CI-CD pipeline with the following steps:
+
+* Write a Dockerfile
+```Dockerfile
+FROM wonderix/rmk:latest
+
+# Add the required compilation packages here
+# RUN apt-get install -y ...
+
+# Add the required credentials as environment variables
+# ENV GITHUB_USERNAME
+# ENV GITHUB_PASSWORD
+
+# Start the pipeline
+WORKDIR /app
+# start.sh is provided by you and should do the following
+# * Use credentials provided as environment variables to log into required web services
+# * Start rmk eg `rmk -u -C https://github.com/<repo>`
+COPY start.sh /app/
+ENTRYPOINT [ "/app/start.sh" ]
+```
+* Build and push the docker image `docker build . -t <hub>/ci-cd:latest && docker push <hub>/ci-cd:latest`
+* Run this dockerfile on a central machine with `docker run --rm -e GITHUB_USERNAME -e GITHUB_PASSWORD <hub>/ci-cd:latest`
+
 ![](doc/Rmk.png)
 

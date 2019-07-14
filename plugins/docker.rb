@@ -1,4 +1,4 @@
-
+# frozen_string_literal: true
 
 require 'find'
 
@@ -9,8 +9,8 @@ require 'yaml'
 
 # DockerfileParser main class
 class DockerfileParser
-  @commands = %w(FROM MAINTAINER RUN CMD EXPOSE ENV ADD COPY ENTRYPOINT
-                 VOLUME USER WORKDIR ONBUILD)
+  @commands = %w[FROM MAINTAINER RUN CMD EXPOSE ENV ADD COPY ENTRYPOINT
+                 VOLUME USER WORKDIR ONBUILD]
 
   # Parse Dockerfile from specified path
   # @return [Array<Hash>] parser Dockerfile
@@ -40,8 +40,7 @@ class DockerfileParser
       params: split_params(
         step[:command],
         dockerfile_array[step[:index] + 1..next_cmd_index - 1]
-      )
-    }
+      ) }
   end
 
   def self.split_params(cmd, params)
@@ -53,7 +52,7 @@ class DockerfileParser
     when 'COPY', 'ADD' then { src: params[0], dst: params[1] }
     else
       params = params.join(' ') if params.is_a?(Array)
-      YAML.load(params.to_s)
+      YAML.safe_load(params.to_s)
     end
   end
 
@@ -63,25 +62,23 @@ class DockerfileParser
   private_class_method :split_dockerfile
 end
 
-
 module Docker
-
   include Rmk::Tools
 
-  def docker_build(name,docker_file: "Dockerfile", docker_dir: ".", depends: [], tag: 'latest', hub: '')
-    docker_dir  = File.join(dir,docker_dir)
-    docker_file  = File.join(dir,docker_file)
-    job("#{hub}#{name}",[docker_file] + depends ) do | hidden |
-      DockerfileParser.load_file(docker_file).each do | cmd |
+  def docker_build(name, docker_file: 'Dockerfile', docker_dir: '.', depends: [], tag: 'latest', hub: '')
+    docker_dir = File.join(dir, docker_dir)
+    docker_file = File.join(dir, docker_file)
+    job("#{hub}#{name}", [docker_file] + depends) do |hidden|
+      DockerfileParser.load_file(docker_file).each do |cmd|
         case cmd[:command]
-        when "COPY", "ADD"
+        when 'COPY', 'ADD'
           unless cmd[:params][:src].start_with?('--')
             begin
-              Find.find(File.join(docker_dir,cmd[:params][:src])) do |path|
+              Find.find(File.join(docker_dir, cmd[:params][:src])) do |path|
                 hidden[path] = true if File.file?(path)
               end
-            rescue Exception => exc
-              raise "Unable to read '#{cmd[:params][:src]}' required for #{docker_file}: #{exc}"
+            rescue StandardError => e
+              raise "Unable to read '#{cmd[:params][:src]}' required for #{docker_file}: #{e}"
             end
           end
         end
@@ -94,10 +91,9 @@ module Docker
 
   def docker_push(depends)
     image = depends.first
-    job("docker/#{image.name}",depends) do
-      system("docker push #{image.result()}")
+    job("docker/#{image.name}", depends) do
+      system("docker push #{image.result}")
       image.name
     end.to_a
   end
-
 end
