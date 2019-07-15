@@ -23,12 +23,12 @@ html(lang='en')
       .footer-copyright
         .container
     javascript:
-      var serverSentEvent = new EventSource('/status');
+      var serverSentEvent = new EventSource("#{url('/status')}");
       var cog = document.getElementById("cog");
       serverSentEvent.onmessage = function(e) {
-        if ( e.data == "true" ) {
+        if ( e.data == "building" ) {
           cog.classList.add("fa-spin")
-        } else {
+        } else if ( e.data == "finished" ) {
           location.reload();
         }
       }

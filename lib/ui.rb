@@ -82,19 +82,33 @@ module Rmk
       @controller = controller
       @build_interval = build_interval
       @connections = []
+      status= "idle"
       @root_build_results = RootBuildResult.new(@controller, [])
       build
     end
 
     def build
-      @connections.each { |c| c << "data: true\n\n" }
+      self.status= "building"
       @controller.run do |jobs|
         @root_build_results = RootBuildResult.new(@controller, jobs)
-        @connections.each { |c| c << "data: false\n\n" }
+        self.status= "finished"
         EventMachine.add_timer(@build_interval) do
           build
         end
+        self.status= "idle"
       end
+    end
+
+    def status=(value)
+      @status = value
+      @connections.each { |c| c << "data: #{@status}\n\n" }
+    end
+
+    def subscribe_status(out)
+      @connections << out
+      out <<  "data: #{@status}\n\n"
+      # purge dead connections
+      @connections.reject!(&:closed?)
     end
 
     configure do
@@ -116,10 +130,7 @@ module Rmk
 
     get '/status', provides: 'text/event-stream' do
       stream(:keep_open) do |out|
-        @connections << out
-
-        # purge dead connections
-        @connections.reject!(&:closed?)
+        subscribe_status(out)
       end
     end
 

@@ -104,16 +104,21 @@ module Rmk
   end
 
   module Popen3Reader
-    def initialize(out,fiber, wait_thr)
+    def initialize(out,fiber)
       @out = out
       @fiber = fiber
-      @wait_thr = wait_thr
+      @closed = false
     end
 
     def notify_readable
       @out.write(@io.readpartial(1024))
     rescue EOFError
-      @fiber.resume @wait_thr.value.exitstatus
+      @closed = true
+      @fiber.resume
+    end
+
+    def closed?
+      @closed
     end
   end
 
@@ -154,16 +159,20 @@ module Rmk
       opts = {}
       opts[:chdir] = chdir || dir
       popen3_inner(cmd, **opts) do |stdin, stdout, stderr, wait_thr|
-        connout = EventMachine.watch(stdout, Popen3Reader, out, Fiber.current, wait_thr)
-        connerr = EventMachine.watch(stderr, Popen3Reader, Tee.new(err, exception_buffer), Fiber.current, wait_thr)
+        connout = EventMachine.watch(stdout, Popen3Reader, out, Fiber.current)
+        connerr = EventMachine.watch(stderr, Popen3Reader, Tee.new(err, exception_buffer), Fiber.current)
         begin
-           if stdin_data
-             stdin.write(stdin_data)
-             stdin.close
-           end
-           connout.notify_readable = true
-           connerr.notify_readable = true
-           raise "#{cmd_string}\n#{exception_buffer.string}" unless Fiber.yield.zero?
+          if stdin_data
+            stdin.write(stdin_data)
+            stdin.close
+          end
+          connout.notify_readable = true
+          connerr.notify_readable = true
+          success = true
+          while ! ( connout.closed? && connerr.closed?)
+            Fiber.yield
+          end
+          raise "#{cmd_string}\n#{exception_buffer.string}" unless wait_thr.value.exitstatus.zero?
         ensure
           connout.detach
           connerr.detach
