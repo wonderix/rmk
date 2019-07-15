@@ -74,6 +74,21 @@ module Rmk
     end
   end
 
+  class SseLogger
+    def initialize()
+      @connections = []
+    end
+
+    def write(data)
+      @connections.each { |c| c << "data: #{data}\n\n" }
+    end
+    
+    def subscribe(out)
+      @connections << out
+      @connections.reject!(&:closed?)
+    end
+  end
+
   class App < Sinatra::Base
     helpers Sinatra::Streaming
 
@@ -81,7 +96,8 @@ module Rmk
       super()
       @controller = controller
       @build_interval = build_interval
-      @connections = []
+      @status_connections = []
+      @sse_logger = SseLogger.new()
       status= "idle"
       @root_build_results = RootBuildResult.new(@controller, [])
       build
@@ -101,15 +117,16 @@ module Rmk
 
     def status=(value)
       @status = value
-      @connections.each { |c| c << "data: #{@status}\n\n" }
+      @status_connections.each { |c| c << "data: #{@status}\n\n" }
     end
 
     def subscribe_status(out)
-      @connections << out
+      @status_connections << out
       out <<  "data: #{@status}\n\n"
       # purge dead connections
-      @connections.reject!(&:closed?)
+      @status_connections.reject!(&:closed?)
     end
+
 
     configure do
       set :threaded, false

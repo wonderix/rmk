@@ -133,6 +133,18 @@ module Rmk
   end
 
   module Tools
+
+    @@stderr = $stderr
+    @@stdout = $stdout
+
+    def self.stdout=(value)
+      @@stdout = value
+    end
+
+    def self.stderr=(value)
+      @@stderr = value
+    end
+
     def self.relative(msg)
       msg.to_s.gsub(%r{(/[^\s:]*/)}) do
         File.relative_path_from(Regexp.last_match(1), Dir.getwd) + '/'
@@ -151,7 +163,7 @@ module Rmk
       out.string
     end
 
-    def popen3(cmd, out: $stdout, err: $stderr, chdir: nil, stdin_data: nil, trace: true)
+    def popen3(cmd, out: @@stdout, err: @@stderr, chdir: nil, stdin_data: nil, trace: true)
       cmd_string = cmd.is_a?(Array) ? cmd.join(' ') : cmd
       message = Rmk.verbose.positive? ? cmd_string : Tools.relative(cmd_string)
       puts(message) if trace
