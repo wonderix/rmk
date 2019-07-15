@@ -60,15 +60,15 @@ module ConcourseResource
     include Rmk::Tools
   
     def concourse_put(name, resource, put_parameters)
-      resourceType = $concourseResourceTypes[resource.definition["type"]]
-      image = resourceType.definition["source"]["repository"] + ":" + resourceType.definition["source"]["tag"]
-      mount = "-v #{Dir.pwd}:/mount/"
-
-      stdin = Hash.new
-      stdin["source"] = resource.definition["source"]
-      stdin["params"] = YAML.load(put_parameters)
-
       job(name,[]) do | hidden | 
+        resourceType = $concourseResourceTypes[resource.definition["type"]]
+        image = resourceType.definition["source"]["repository"] + ":" + resourceType.definition["source"]["tag"]
+        mount = "-v #{Dir.pwd}:/mount/"
+  
+        stdin = Hash.new
+        stdin["source"] = resource.definition["source"]
+        stdin["params"] = YAML.load(put_parameters)
+
         command = "docker run #{mount} --rm -i #{image} /opt/resource/out /mount/"
         print command + "\n"
         stdout, stderr, status = Open3.capture3(command, :stdin_data=>stdin.to_json)
