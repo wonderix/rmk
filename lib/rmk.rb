@@ -104,13 +104,16 @@ module Rmk
   end
 
   module Popen3Reader
-    def initialize(out)
+    def initialize(out,fiber, wait_thr)
       @out = out
+      @fiber = fiber
+      @wait_thr = wait_thr
     end
 
     def notify_readable
       @out.write(@io.readpartial(1024))
-    rescue EOFError # rubocop:disable Lint/HandleExceptions
+    rescue EOFError
+      @fiber.resume @wait_thr.value.exitstatus
     end
   end
 
@@ -121,17 +124,6 @@ module Rmk
 
     def write(data)
       @out.each { |o| o.write(data) }
-    end
-  end
-
-  module ProcessWatcher
-    def initialize(fiber, wait_thr)
-      @fiber = fiber
-      @wait_thr = wait_thr
-    end
-
-    def process_exited
-      @fiber.resume @wait_thr.value
     end
   end
 
@@ -162,9 +154,8 @@ module Rmk
       opts = {}
       opts[:chdir] = chdir || dir
       popen3_inner(cmd, **opts) do |stdin, stdout, stderr, wait_thr|
-        EventMachine.watch_process(wait_thr[:pid], ProcessWatcher, Fiber.current, wait_thr)
-        connout = EventMachine.watch(stdout, Popen3Reader, out)
-        connerr = EventMachine.watch(stderr, Popen3Reader, Tee.new(err, exception_buffer))
+        connout = EventMachine.watch(stdout, Popen3Reader, out, Fiber.current, wait_thr)
+        connerr = EventMachine.watch(stderr, Popen3Reader, Tee.new(err, exception_buffer), Fiber.current, wait_thr)
         begin
            if stdin_data
              stdin.write(stdin_data)
@@ -172,7 +163,7 @@ module Rmk
            end
            connout.notify_readable = true
            connerr.notify_readable = true
-           raise "#{cmd_string}\n#{exception_buffer.string}" unless Fiber.yield.exitstatus.zero?
+           raise "#{cmd_string}\n#{exception_buffer.string}" unless Fiber.yield.zero?
         ensure
           connout.detach
           connerr.detach
@@ -414,22 +405,22 @@ module Rmk
       if File.directory?(local)
         if File.readable?(info_file)
           info = YAML.safe_load(File.read(info_file))
-          if info[:branch] != branch
+          if info['branch'] != branch
             system("git checkout #{branch}", chdir: local)
-            info[:branch] = branch
+            info['branch'] = branch
             File.write(info_file, YAML.dump(info))
           else
             system('git pull', chdir: local)
           end
         else
           system("git checkout #{branch}", chdir: local)
-          info[:branch] = branch
+          info['branch'] = branch
           File.write(info_file, YAML.dump(info))
         end
       else
         FileUtils.mkdir_p(File.dirname(local))
-        system("git clone --branch #{branch} #{remote} #{local}")
-        info[:branch] = branch
+        system("git clone --branch #{branch} #{remote} #{local}", chdir: File.dirname(local))
+        info['branch'] = branch
         File.write(info_file, YAML.dump(info))
       end
       local
@@ -586,8 +577,6 @@ module Rmk
       put(File.join(job.name, id, hid + '.dep'), { hid => headers }.to_json)
     end
   end
-
-  EventMachine.kqueue = true
 
   class Controller
     attr_accessor :dir, :policy, :task

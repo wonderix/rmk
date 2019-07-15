@@ -44,8 +44,6 @@ describe Rmk::Tools, '#system' do
   end
 end
 
-EventMachine.kqueue = true
-
 describe Rmk::Tools, '#popen3' do
   it 'return stdout' do
     EventMachine.run do

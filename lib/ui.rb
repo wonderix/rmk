@@ -82,6 +82,7 @@ module Rmk
       @controller = controller
       @build_interval = build_interval
       @connections = []
+      @root_build_results = RootBuildResult.new(@controller, [])
       build
     end
 
