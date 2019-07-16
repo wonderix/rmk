@@ -4,6 +4,7 @@ require 'sinatra/base'
 require 'sinatra/streaming'
 require 'thin'
 require 'slim'
+require 'json'
 
 # rubocop:disable Documentation
 
@@ -75,14 +76,29 @@ module Rmk
   end
 
   class SseLogger
-    def initialize()
+    class Writer
+      def initialize(channel, connections)
+        @channel = channel
+        @connections = connections
+      end
+
+      def write(data)
+        # $stdout.write(data)
+        event = { channel: @channel, data: data}
+        @connections.each do |c|
+          c << "data: #{event.to_json}\n\n" unless c.closed?
+        end
+      end
+    end
+
+    def initialize
       @connections = []
     end
 
-    def write(data)
-      @connections.each { |c| c << "data: #{data}\n\n" }
+    def writer(channel)
+      Writer.new(channel, @connections)
     end
-    
+
     def subscribe(out)
       @connections << out
       @connections.reject!(&:closed?)
@@ -97,36 +113,39 @@ module Rmk
       @controller = controller
       @build_interval = build_interval
       @status_connections = []
-      @sse_logger = SseLogger.new()
-      status= "idle"
+      @sse_logger = SseLogger.new
+      Rmk.stdout = @sse_logger.writer(:out)
+      Rmk.stderr = @sse_logger.writer(:err)
+      self.status = :idle
       @root_build_results = RootBuildResult.new(@controller, [])
       build
     end
 
     def build
-      self.status= "building"
+      self.status = :building
       @controller.run do |jobs|
         @root_build_results = RootBuildResult.new(@controller, jobs)
-        self.status= "finished"
+        self.status = :finished
         EventMachine.add_timer(@build_interval) do
           build
         end
-        self.status= "idle"
+        self.status = :idle
       end
     end
 
     def status=(value)
       @status = value
-      @status_connections.each { |c| c << "data: #{@status}\n\n" }
+      @status_connections.each do |c|
+        c <<  c << "data: #{@status}\n\n" unless c.closed?
+      end
     end
 
     def subscribe_status(out)
       @status_connections << out
-      out <<  "data: #{@status}\n\n"
+      out << "data: #{@status}\n\n"
       # purge dead connections
       @status_connections.reject!(&:closed?)
     end
-
 
     configure do
       set :threaded, false
@@ -151,6 +170,16 @@ module Rmk
       end
     end
 
+    get '/log' do
+      slim :log
+    end
+
+    get '/log/stream', provides: 'text/event-stream' do
+      stream(:keep_open) do |out|
+        @sse_logger.subscribe(out)
+      end
+    end
+
     def self.run(controller, build_interval)
       EventMachine.run do
         web_app = App.new(controller, build_interval)
@@ -161,13 +190,8 @@ module Rmk
           end
         end
 
-        Rack::Server.start(
-          app: dispatch,
-          server: 'thin',
-          Host: '0.0.0.0',
-          Port: '8181',
-          signals: false
-        )
+        Rack::Server.start(app: dispatch, server: 'thin', Host: '0.0.0.0',
+                           Port: '8181', signals: false)
       end
     end
   end

@@ -13,3 +13,10 @@ ul
         span( style="color: #{build_result.exception ? 'red' : 'green'}")= build_result.name
         span(style ="padding-left: 10px; font-size: 80%")= build_result.dir
 
+javascript:
+  var serverSentEvent = new EventSource("#{url('/status')}");
+  serverSentEvent.onmessage = function(e) {
+    if ( e.data == "finished" ) {
+      location.reload();
+    }
+  }

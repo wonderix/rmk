@@ -48,13 +48,13 @@ class Array
 end
 
 module Rmk
-  def self.verbose
-    @verbose.to_i
+  class << self
+    attr_accessor :stderr, :stdout, :verbose
   end
 
-  def self.verbose=(level)
-    @verbose = level
-  end
+  Rmk.stdout = $stdout
+  Rmk.stderr = $stderr
+  Rmk.verbose = 0
 
   RMK_DIR = File.expand_path('~/.rmk')
 
@@ -133,18 +133,6 @@ module Rmk
   end
 
   module Tools
-
-    @@stderr = $stderr
-    @@stdout = $stdout
-
-    def self.stdout=(value)
-      @@stdout = value
-    end
-
-    def self.stderr=(value)
-      @@stderr = value
-    end
-
     def self.relative(msg)
       msg.to_s.gsub(%r{(/[^\s:]*/)}) do
         File.relative_path_from(Regexp.last_match(1), Dir.getwd) + '/'
@@ -153,7 +141,7 @@ module Rmk
 
     def system(cmd, chdir: nil)
       out = StringIO.new
-      popen3(cmd, out: Tee.new(out, $stdout), chdir: chdir)
+      popen3(cmd, out: Tee.new(out, Rmk.stdout), chdir: chdir)
       out.string
     end
 
@@ -163,10 +151,10 @@ module Rmk
       out.string
     end
 
-    def popen3(cmd, out: @@stdout, err: @@stderr, chdir: nil, stdin_data: nil, trace: true)
+    def popen3(cmd, out: Rmk.stdout, err: Rmk.stderr, chdir: nil, stdin_data: nil, trace: true)
       cmd_string = cmd.is_a?(Array) ? cmd.join(' ') : cmd
       message = Rmk.verbose.positive? ? cmd_string : Tools.relative(cmd_string)
-      puts(message) if trace
+      out.write(message + "\n") if trace
       exception_buffer = StringIO.new
       opts = {}
       opts[:chdir] = chdir || dir
@@ -180,10 +168,7 @@ module Rmk
           end
           connout.notify_readable = true
           connerr.notify_readable = true
-          success = true
-          while ! ( connout.closed? && connerr.closed?)
-            Fiber.yield
-          end
+          Fiber.yield until connout.closed? && connerr.closed?
           raise "#{cmd_string}\n#{exception_buffer.string}" unless wait_thr.value.exitstatus.zero?
         ensure
           connout.detach
@@ -618,12 +603,12 @@ module Rmk
           begin
             jobs = build_file.send(@task.intern)
             item = @policy.build(jobs)
-            p item.result if Rmk.verbose.positive?
-            puts 'Build OK'
+            Rmk.stdout.write item.result.inspect if Rmk.verbose > 0
+            Rmk.stdout.write "Build OK\n"
           rescue StandardError => e
-            warn e.message
-            warn e.backtrace.join("\n") if Rmk.verbose.positive?
-            puts 'Build Failed'
+            Rmk.stderr.write(e.message + "\n")
+            Rmk.stderr.write(e.backtrace.join("\n")) if Rmk.verbose > 0 
+            Rmk.stdout.write "Build Failed\n"
             result = 1
           end
           yield jobs if block_given?

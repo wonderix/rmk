@@ -9,9 +9,10 @@ html(lang='en')
   body
     nav.blue.darken-2
       .nav-wrapper
-        a.brand-logo.left href="#!"  Ruby make
+        a.brand-logo.left href=url('/build/root')  Ruby make
         div.right
-          i(class="fa fa-cog" id="cog" style="font-size: 200%; margin-right:20px")
+          a(href=url('/log'))
+            i(class="fa fa-cog" id="cog" style="font-size: 200%; margin-right:20px")
     #index-banner.section.no-pad-bot.gray.lighten-5
       .container
         br/
@@ -29,6 +30,6 @@ html(lang='en')
         if ( e.data == "building" ) {
           cog.classList.add("fa-spin")
         } else if ( e.data == "finished" ) {
-          location.reload();
+          cog.classList.remove("fa-spin")
         }
       }

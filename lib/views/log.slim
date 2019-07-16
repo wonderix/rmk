@@ -1,0 +1,19 @@
+h2 Log
+div(id="scroll" style="overflow-y: scroll; height:400px;")
+  pre(id="log")
+javascript:
+  var serverSentEvent = new EventSource("#{url('/log/stream')}");
+  var log = document.getElementById("log");
+  var scroll = document.getElementById("scroll");
+  serverSentEvent.onmessage = function(e) {
+    let event = JSON.parse(e.data)
+    if ( event.channel == "out") {
+      log.innerHTML += event.data
+    } else {
+      var red = document.createElement('i');
+      red.style.color = "red"
+      red.innerHTML = event.data;
+      log.appendChild(red)
+    }
+    scroll.scrollTop = scroll.scrollHeight;
+  }
