@@ -84,7 +84,8 @@ module Rmk
 
       def write(data)
         # $stdout.write(data)
-        event = { channel: @channel, data: data}
+        event = { channel: @channel, data: data,
+                  time: Time.now.strftime('%H:%M:%S')}
         @connections.each do |c|
           c << "data: #{event.to_json}\n\n" unless c.closed?
         end
@@ -136,7 +137,7 @@ module Rmk
     def status=(value)
       @status = value
       @status_connections.each do |c|
-        c <<  c << "data: #{@status}\n\n" unless c.closed?
+        c << "data: #{@status}\n\n" unless c.closed?
       end
     end
 

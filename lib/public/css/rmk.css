@@ -1,8 +1,29 @@
-.log {
+.code {
+    font-family: monospace;
+    padding: 1px;
+    vertical-align: top;
+}
 
+.log {
     white-space: pre-wrap;
     background-color: black;
     color: lightgrey;
     padding: 10px;
     font-size: 80%;
+}
+
+.code tr {
+    border-bottom: 0px none white;
+}
+
+.time {
+    width: 100px;
+    color: gray;
+    -webkit-touch-callout: none;
+	-webkit-user-select: none;
+	-khtml-user-select: none;
+	-moz-user-select: none;
+	-ms-user-select: none;
+	-o-user-select:none;
+	user-select: none;
 }
