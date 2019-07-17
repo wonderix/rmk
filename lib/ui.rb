@@ -201,8 +201,8 @@ module Rmk
       end
     end
 
-    get '/log' do
-      slim :log
+    post '/cancel' do
+      Tools.killall
     end
 
     get '/log/stream', provides: 'text/event-stream' do

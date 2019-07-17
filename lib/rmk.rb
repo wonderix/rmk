@@ -133,11 +133,27 @@ module Rmk
   end
 
   module Tools
-    def self.relative(msg)
-      msg.to_s.gsub(%r{(/[^\s:]*/)}) do
-        File.relative_path_from(Regexp.last_match(1), Dir.getwd) + '/'
+    class << self
+      attr_accessor :pids, :trace
+      def relative(msg)
+        msg.to_s.gsub(%r{(/[^\s:]*/)}) do
+          File.relative_path_from(Regexp.last_match(1), Dir.getwd) + '/'
+        end
+      end
+
+      def killall
+        pids.each do |pid, command|
+          begin
+            Process.kill('TERM', pid)
+          rescue Errno::ESRCH # rubocop:disable Lint/HandleExceptions
+          end
+        end
+        pids.clear
       end
     end
+
+    Tools.pids = {}
+    Tools.trace = true
 
     def system(cmd, chdir: nil)
       out = StringIO.new
@@ -151,7 +167,7 @@ module Rmk
       out.string
     end
 
-    def popen3(cmd, out: Rmk.stdout, err: Rmk.stderr, chdir: nil, stdin_data: nil, trace: true)
+    def popen3(cmd, out: Rmk.stdout, err: Rmk.stderr, chdir: nil, stdin_data: nil, trace: Tools.trace)
       cmd_string = cmd.is_a?(Array) ? cmd.join(' ') : cmd
       message = Rmk.verbose.positive? ? cmd_string : Tools.relative(cmd_string)
       out.write(message + "\n") if trace
@@ -162,15 +178,16 @@ module Rmk
         connout = EventMachine.watch(stdout, Popen3Reader, out, Fiber.current)
         connerr = EventMachine.watch(stderr, Popen3Reader, Tee.new(err, exception_buffer), Fiber.current)
         begin
-          if stdin_data
-            stdin.write(stdin_data)
-            stdin.close
-          end
+          Tools.pids[wait_thr.pid] = cmd_string
+          stdin.write(stdin_data) if stdin_data
+          stdin.close
           connout.notify_readable = true
           connerr.notify_readable = true
           Fiber.yield until connout.closed? && connerr.closed?
+          raise "#{cmd_string}\nKilled" unless Tools.pids.delete(wait_thr.pid)
           raise "#{cmd_string}\n#{exception_buffer.string}" unless wait_thr.value.exitstatus.zero?
         ensure
+          Tools.pids.delete(wait_thr.pid)
           connout.detach
           connerr.detach
         end

@@ -44,6 +44,8 @@ describe Rmk::Tools, '#system' do
   end
 end
 
+Rmk::Tools.trace = false
+
 describe Rmk::Tools, '#popen3' do
   it 'return stdout' do
     EventMachine.run do
