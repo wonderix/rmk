@@ -1,17 +1,53 @@
-h2
+h3
   = @build_result.name
-  span(style ="padding-left: 10px; font-size: 30%")=@build_result.dir
-
-- if @build_result.exception
-  pre.log(style ="white-space: pre-wrap")= @build_result.exception.message
-- else
-  pre.log(style ="white-space: pre-wrap") OK
+  span(style ="padding-left: 10px; font-size: 50%")=@build_result.dir
+  div.right
+    a.repeat(href=url("/rebuild/#{@build_result.id}"))
+      i(class="fa fa-repeat" style ="font-size: 50%")
 ul
   - @build_result.depends.each do |build_result|
     li
-      a(href=url("/build/#{build_result.id}") style="color: #{build_result.exception ? 'red' : 'green'}")
-        span( style="color: #{build_result.exception ? 'red' : 'green'}")= build_result.name
+      a(href=url("/build/#{build_result.id}") class="#{build_result.exception ? 'error' : 'ok'}")
+        span= build_result.name
         span(style ="padding-left: 10px; font-size: 80%")= build_result.dir
+
+- if @build_result.exception
+  h5 Error
+  .terminal
+    .error= @build_result.exception.message
+h5 Logs
+div(id="scroll" style="overflow-y: scroll; height:400px;")
+  table.terminal.code
+    thead
+    tbody.code(id="log")
+    - @logs.each do |log|
+      - log[:data].split("\n").each do |line|
+        tr
+          td.time.code= log[:time]
+          td.code(class="#{log[:channel]}")= line
+javascript:
+  var serverSentEvent = new EventSource("#{url('/log/stream')}");
+  var log = document.getElementById("log");
+  var scroll = document.getElementById("scroll");
+  scroll.scrollTop = scroll.scrollHeight;
+  serverSentEvent.onmessage = function(e) {
+    let event = JSON.parse(e.data);
+    event.data.split("\n").forEach(function(line) {
+      if ( line != "" ) {
+        row = document.createElement('tr');
+        time = document.createElement('td');
+        time.classList.add('code','time')
+        time.innerHTML = event.time
+        row.appendChild(time);
+        text = document.createElement('td');
+        text.classList.add('code',event.channel)
+        text.innerHTML = line;
+        row.appendChild(text);
+        log.appendChild(row);
+      }
+    })
+    scroll.scrollTop = scroll.scrollHeight;
+  }
 
 javascript:
   var serverSentEvent = new EventSource("#{url('/status')}");

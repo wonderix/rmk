@@ -5,6 +5,7 @@ require 'sinatra/streaming'
 require 'thin'
 require 'slim'
 require 'json'
+require 'ostruct'
 
 # rubocop:disable Documentation
 
@@ -12,25 +13,29 @@ module Rmk
   class BuildResult
     attr_accessor :depends
 
-    def initialize(item)
-      @item = item
+    def initialize(job)
+      @job = job
       @depends = []
     end
 
+    def jobs
+      [@job]
+    end
+
     def name
-      @item.name
+      @job.name
     end
 
     def dir
-      @item.plan.dir
+      @job.plan.dir
     end
 
     def id
-      @item.id
+      @job.id
     end
 
     def exception
-      @item.exception
+      @job.exception
     end
   end
 
@@ -43,6 +48,10 @@ module Rmk
       @build_results = {}
       @build_results['root'] = self
       @depends = scan(jobs)
+    end
+
+    def jobs
+      nil
     end
 
     def name
@@ -64,11 +73,11 @@ module Rmk
 
     def scan(jobs)
       result = []
-      jobs.each do |item|
-        next unless item.is_a?(Rmk::Job)
+      jobs.each do |job|
+        next unless job.is_a?(Rmk::Job)
 
-        build_result = @build_results[item.id] ||= BuildResult.new(item)
-        build_result.depends = scan(item.depends)
+        build_result = @build_results[job.id] ||= BuildResult.new(job)
+        build_result.depends = scan(job.depends)
         result << build_result
       end
       result
@@ -77,27 +86,32 @@ module Rmk
 
   class SseLogger
     class Writer
-      def initialize(channel, connections)
+      def initialize(channel, connections, logs)
         @channel = channel
         @connections = connections
+        @logs = logs
       end
 
       def write(data)
         # $stdout.write(data)
-        event = { channel: @channel, data: data,
-                  time: Time.now.strftime('%H:%M:%S')}
+        log = { channel: @channel, data: data,
+                time: Time.now.strftime('%H:%M:%S') }
+        @logs.shift if @logs.size > 1000
+        @logs << log
         @connections.each do |c|
-          c << "data: #{event.to_json}\n\n" unless c.closed?
+          c << "data: #{log.to_json}\n\n" unless c.closed?
         end
       end
     end
 
+    attr_reader :logs
     def initialize
       @connections = []
+      @logs = []
     end
 
     def writer(channel)
-      Writer.new(channel, @connections)
+      Writer.new(channel, @connections, @logs)
     end
 
     def subscribe(out)
@@ -112,23 +126,28 @@ module Rmk
     def initialize(controller, build_interval)
       super()
       @controller = controller
-      @build_interval = build_interval
       @status_connections = []
       @sse_logger = SseLogger.new
       Rmk.stdout = @sse_logger.writer(:out)
-      Rmk.stderr = @sse_logger.writer(:err)
+      Rmk.stderr = @sse_logger.writer(:error)
       self.status = :idle
       @root_build_results = RootBuildResult.new(@controller, [])
-      build
+      @queue = EventMachine::Queue.new
+      build(interval: build_interval)
     end
 
-    def build
+    def build(policy: nil, interval: nil, jobs: nil)
       self.status = :building
-      @controller.run do |jobs|
-        @root_build_results = RootBuildResult.new(@controller, jobs)
+      @controller.run(policy: policy, jobs: jobs) do |result_jobs|
+        @root_build_results = RootBuildResult.new(@controller, result_jobs)
         self.status = :finished
-        EventMachine.add_timer(@build_interval) do
-          build
+        if interval
+          EventMachine.add_timer(interval) do
+            @queue.push({ policy: policy, interval: interval, jobs: jobs }) # rubocop:disable Style/BracesAroundHashParameters, Metrics/LineLength
+            @queue.pop do |options|
+              build(**options)
+            end
+          end
         end
         self.status = :idle
       end
@@ -158,8 +177,19 @@ module Rmk
 
     get '/build/:id' do
       @build_result = @root_build_results.build_results[params['id']]
+      @logs = @sse_logger.logs
       halt 404 unless @build_result
       slim :build
+    end
+
+    get '/rebuild/:id' do
+      @build_result = @root_build_results.build_results[params['id']]
+      halt 404 unless @build_result
+      @queue.push({ policy: LocalBuildPolicy.new, jobs: @build_result.jobs }) # rubocop:disable Style/BracesAroundHashParameters, Metrics/LineLength
+      @queue.pop do |options|
+        build(**options)
+      end
+      redirect to("/build/#{params['id']}")
     end
 
     get '/favicon.ico' do

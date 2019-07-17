@@ -331,6 +331,14 @@ module Rmk
     def to_a
       [self]
     end
+
+    def reset
+      @result = nil
+      @last_result= nil
+      @depends.each do |d|
+        d.reset if d.is_a?(Job)
+      end
+    end
   end
 
   class Plan
@@ -452,6 +460,7 @@ module Rmk
     end
   end
 
+
   class ModificationTimeBuildPolicy
     def initialize(readonly = false)
       @readonly = readonly
@@ -491,6 +500,27 @@ module Rmk
           end
         else
           job.use_last_result
+        end
+      end
+      jobs.map(&:result)
+    end
+  end
+
+  class LocalBuildPolicy < ModificationTimeBuildPolicy
+    def initialize
+      @depth = 0
+      @child_build_policy = ModificationTimeBuildPolicy.new
+    end
+
+    def build(jobs)
+      jobs.each do |job|
+        next unless job.is_a?(Job)
+
+        @depth += 1
+        begin
+          job.build(@depth > 1 ? self : @child_build_policy) unless job.result
+        ensure
+          @depth -= 1
         end
       end
       jobs.map(&:result)
@@ -593,21 +623,20 @@ module Rmk
       @task = 'all'
     end
 
-    def run
+    def run(policy: nil, jobs: nil)
+      policy ||= @policy
       result = 0
       EventMachine.run do
         Fiber.new do
-          build_file_cache = PlanCache.new
-          build_file = build_file_cache.load('build.rmk', @dir)
-          jobs = nil
+          jobs ||= load_jobs
+          jobs.each(&:reset)
           begin
-            jobs = build_file.send(@task.intern)
-            item = @policy.build(jobs)
-            Rmk.stdout.write item.result.inspect if Rmk.verbose > 0
+            item = policy.build(jobs)
+            Rmk.stdout.write item.result.inspect if Rmk.verbose > 0 # rubocop:disable Metrics/LineLength, Style/NumericPredicate
             Rmk.stdout.write "Build OK\n"
           rescue StandardError => e
             Rmk.stderr.write(e.message + "\n")
-            Rmk.stderr.write(e.backtrace.join("\n")) if Rmk.verbose > 0 
+            Rmk.stderr.write(e.backtrace.join("\n")) if Rmk.verbose > 0 # rubocop:disable Metrics/LineLength, Style/NumericPredicate
             Rmk.stdout.write "Build Failed\n"
             result = 1
           end
@@ -615,6 +644,12 @@ module Rmk
         end.resume
       end
       result
+    end
+
+    def load_jobs
+      build_file_cache = PlanCache.new
+      build_file = build_file_cache.load('build.rmk', @dir)
+      build_file.send(@task.intern)
     end
   end
 end

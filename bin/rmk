@@ -14,11 +14,15 @@ OptionParser.new do |opts|
   opts.on('-C', '--directory [directory]', 'Change to directory ') do |v|
     controller.dir = v
   end
-  opts.on('-r', '--readonly', 'Raise exception when files are rebuild') do |_v|
+  opts.on('-r', '--readonly', 'Raise exception when files are rebuild') do
     controller.policy = Rmk::ModificationTimeBuildPolicy.new(true)
   end
-  opts.on('-a', '--always', 'build files unconditionally') do |_v|
+  opts.on('-a', '--always', 'build files unconditionally') do
     controller.policy = Rmk::AlwaysBuildPolicy.new
+  end
+  opts.on('-l', '--local',
+          'build files unconditionally for root jobs inside local dir') do
+    controller.policy = Rmk::LocalBuildPolicy.new
   end
   opts.on('-c', '--cache [url]', 'use build cache ') do |v|
     controller.policy = Rmk::CacheBuildPolicy.new(v)

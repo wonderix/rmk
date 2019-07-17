@@ -1,19 +1,35 @@
 .code {
-    font-family: monospace;
     padding: 1px;
     vertical-align: top;
 }
 
-.log {
+.error {
+    color: red;
+}
+
+.ok {
+    color: green;
+}
+
+.repeat {
+    color: #1976D2
+}
+
+.terminal {
+    font-family: monospace;
     white-space: pre-wrap;
-    background-color: black;
-    color: lightgrey;
+    background-color: rgb(230, 230, 230);
+    color: black;
     padding: 10px;
     font-size: 80%;
 }
 
 .code tr {
     border-bottom: 0px none white;
+}
+
+.body {
+    margin: 20px;
 }
 
 .time {
