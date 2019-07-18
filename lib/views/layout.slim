@@ -13,15 +13,18 @@ html(lang='en')
         div.right
           a(href="#" onclick="cancel();return false;")
             i(class="fa fa-cog" id="cog" style="font-size: 200%; margin-right:20px")
+        div.right
+          a(href="#" onclick="toggleRunning();return false;")
+            i(class="fa  #{@running.value ? 'fa-pause' : 'fa-play blink'}" id="running" style="font-size: 200%; margin-right:20px")
     .body
       == yield
     footer.page-footer.blue.darken-3
       .footer-copyright
         .container
 javascript:
-  var serverSentEvent = new EventSource("#{url('/status')}");
+  var statusSource = new EventSource("#{url('/status')}");
   var cog = document.getElementById("cog");
-  serverSentEvent.onmessage = function(e) {
+  statusSource.onmessage = function(e) {
     if ( e.data == "building" ) {
       cog.classList.add("fa-spin")
     } else if ( e.data == "finished" ) {
@@ -29,8 +32,25 @@ javascript:
     }
   }
 javascript:
+  var runningSource = new EventSource("#{url('/running')}");
+  var running = document.getElementById("running");
+  runningSource.onmessage = function(e) {
+    running.classList.remove('fa-pause','fa-play','blink') 
+    if ( e.data == "false" ) {
+      running.classList.add('fa-play','blink')
+    } else {
+      running.classList.add('fa-pause')
+    }
+  }
+javascript:
   function cancel() {
     var xhttp = new XMLHttpRequest();
     xhttp.open("POST", "#{url('/cancel')}", true);
+    xhttp.send();
+  }
+javascript:
+  function toggleRunning() {
+    var xhttp = new XMLHttpRequest();
+    xhttp.open("POST", "#{url('/running/toggle')}", true);
     xhttp.send();
   }

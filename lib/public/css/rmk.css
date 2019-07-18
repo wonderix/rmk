@@ -15,6 +15,16 @@
     color: #1976D2
 }
 
+.blink {
+    animation: blink 1s linear infinite;
+}
+  
+@keyframes blink {
+    25% { opacity: 0;}
+    50% { opacity: 1;}
+    25% { opacity: 0;}
+}
+
 .terminal {
     font-family: monospace;
     white-space: pre-wrap;

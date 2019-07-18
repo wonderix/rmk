@@ -120,52 +120,65 @@ module Rmk
     end
   end
 
+  class Subscribable
+    attr_reader :value
+    def initialize(value)
+      @value = value
+      @connections = []
+    end
+
+    def value=(value)
+      @value = value
+      @connections.each do |c|
+        c << "data: #{@value}\n\n" unless c.closed?
+      end
+    end
+
+    def subscribe(out)
+      @connections << out
+      out << "data: #{@value}\n\n"
+      @connections.reject!(&:closed?)
+    end
+  end
+
   class App < Sinatra::Base
     helpers Sinatra::Streaming
 
     def initialize(controller, build_interval)
       super()
       @controller = controller
-      @status_connections = []
       @sse_logger = SseLogger.new
       Rmk.stdout = @sse_logger.writer(:out)
       Rmk.stderr = @sse_logger.writer(:error)
-      self.status = :idle
+      @status = Subscribable.new(:idle)
+      @running = Subscribable.new(true)
       @root_build_results = RootBuildResult.new(@controller, [])
       @queue = EventMachine::Queue.new
-      build(interval: build_interval)
+      @build_interval = build_interval
+      enqueue_build
     end
 
-    def build(policy: nil, interval: nil, jobs: nil)
-      self.status = :building
+    def build(policy: nil, interval: @build_interval, jobs: nil)
+      @status.value = :building
       @controller.run(policy: policy, jobs: jobs) do |result_jobs|
         @root_build_results = RootBuildResult.new(@controller, result_jobs)
-        self.status = :finished
-        if interval
+        @status.value = :finished
+        if interval && @running.value
           EventMachine.add_timer(interval) do
-            @queue.push({ policy: policy, interval: interval, jobs: jobs }) # rubocop:disable Style/BracesAroundHashParameters, Metrics/LineLength
-            @queue.pop do |options|
-              build(**options)
-            end
+            enqueue_build(policy: policy, interval: interval, jobs: jobs)
           end
         end
-        self.status = :idle
+        @status.value = :idle
       end
     end
 
-    def status=(value)
-      @status = value
-      @status_connections.each do |c|
-        c << "data: #{@status}\n\n" unless c.closed?
+    def enqueue_build(policy: nil, interval: @build_interval, jobs: nil)
+      @queue.push({ policy: policy, interval: interval, jobs: jobs }) # rubocup:disable Style/BracesAroundHashParameters, Metrics/LineLength
+      @queue.pop do |options|
+        build(**options)
       end
     end
 
-    def subscribe_status(out)
-      @status_connections << out
-      out << "data: #{@status}\n\n"
-      # purge dead connections
-      @status_connections.reject!(&:closed?)
-    end
 
     configure do
       set :threaded, false
@@ -185,10 +198,7 @@ module Rmk
     get '/rebuild/:id' do
       @build_result = @root_build_results.build_results[params['id']]
       halt 404 unless @build_result
-      @queue.push({ policy: LocalBuildPolicy.new, jobs: @build_result.jobs }) # rubocop:disable Style/BracesAroundHashParameters, Metrics/LineLength
-      @queue.pop do |options|
-        build(**options)
-      end
+      enqueue_build(policy: LocalBuildPolicy.new, jobs: @build_result.jobs)
       redirect to("/build/#{params['id']}")
     end
 
@@ -197,13 +207,25 @@ module Rmk
 
     get '/status', provides: 'text/event-stream' do
       stream(:keep_open) do |out|
-        subscribe_status(out)
+        @status.subscribe(out)
       end
+    end
+
+    get '/running', provides: 'text/event-stream' do
+      stream(:keep_open) do |out|
+        @running.subscribe(out)
+      end
+    end
+
+    post '/running/toggle' do
+      enqueue_build unless @running.value
+      @running.value = !@running.value
     end
 
     post '/cancel' do
       Tools.killall
     end
+
 
     get '/log/stream', provides: 'text/event-stream' do
       stream(:keep_open) do |out|
