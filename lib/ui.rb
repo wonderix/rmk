@@ -163,9 +163,9 @@ module Rmk
       @controller.run(policy: policy, jobs: jobs) do |result_jobs|
         @root_build_results = RootBuildResult.new(@controller, result_jobs)
         @status.value = :finished
-        if interval && @running.value
+        if interval
           EventMachine.add_timer(interval) do
-            enqueue_build(policy: policy, interval: interval, jobs: jobs)
+            enqueue_build(policy: policy, interval: interval, jobs: jobs) if @running.value
           end
         end
         @status.value = :idle
