@@ -145,9 +145,9 @@ end
 
 ## Writing jobs
 
-* Every build step must be encapsulated in a work item
-* All dependency checks are based on work items
-* All dependencies must be passed as argument to job
+* Every build step must be encapsulated in a `job`
+* All dependency checks are based on `jobs`
+* All dependencies must be passed as argument to `job
 
 The following method extracts all strings from a given file
 
