@@ -198,7 +198,7 @@ module Rmk
     get '/rebuild/:id' do
       @build_result = @root_build_results.build_results[params['id']]
       halt 404 unless @build_result
-      enqueue_build(policy: LocalBuildPolicy.new, jobs: @build_result.jobs)
+      enqueue_build(policy: LocalBuildPolicy.new, jobs: @build_result.jobs, interval: nil)
       redirect to("/build/#{params['id']}")
     end
 
