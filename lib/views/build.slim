@@ -1,58 +1,65 @@
-h3
-  = @build_result.name
-  span(style ="padding-left: 10px; font-size: 50%")=@build_result.dir
-  div.right
-    a.repeat(href=url("/rebuild/#{@build_result.id}"))
-      i(class="fa fa-repeat" style ="font-size: 50%;  margin-right:20px")
-ul
-  - @build_result.depends.each do |build_result|
-    li
-      a(href=url("/build/#{build_result.id}") class="#{build_result.exception ? 'error' : 'ok'}")
-        span= build_result.name
-        span(style ="padding-left: 10px; font-size: 80%")= build_result.dir
+#build
+  h3
+    span() {{name}}
+    span(style ="padding-left: 10px; font-size: 50%") {{ dir }}
+    div.right
+      a.repeat(href=url("/rebuild/#{@build_result.id}"))
+        i(class="fa fa-repeat" style ="font-size: 50%;  margin-right:20px")
+  ul
+    li(v-for="depend in depends")
+      a(v-bind:href="depend.url" v-bind:class="{ error: depend.exception, ok: !depend.exception}")
+        span() {{ depend.name }}
+        span(style ="padding-left: 10px; font-size: 80%") {{ depend.dir }}
 
-- if @build_result.exception
-  h5 Error
-  .terminal
-    .error= @build_result.exception.message
-h5 Logs
-div(id="scroll" style="overflow-y: scroll; height:400px;")
-  table.terminal.code
-    thead
-    tbody.code(id="log")
-    - @logs.each do |log|
-      - log[:data].split("\n").each do |line|
-        tr
-          td.time.code= log[:time]
-          td.code(class="#{log[:channel]}")= line
+  div(v-if="exception" v-cloak="")
+    h5 Error
+    .terminal
+      .error() {{ exception }}
+  h5 Logs
+  div#scroll(style="overflow-y: scroll; height:400px;")
+    table.terminal.code
+      thead
+      tbody.code
+        tr(is="log-item" v-for="log in logs" v-bind:log="log" )
 javascript:
-  var serverSentEvent = new EventSource("#{url('/log/stream')}");
-  var log = document.getElementById("log");
-  var scroll = document.getElementById("scroll");
-  scroll.scrollTop = scroll.scrollHeight;
-  serverSentEvent.onmessage = function(e) {
-    let event = JSON.parse(e.data);
-    event.data.split("\n").forEach(function(line) {
-      if ( line != "" ) {
-        row = document.createElement('tr');
-        time = document.createElement('td');
-        time.classList.add('code','time')
-        time.innerHTML = event.time
-        row.appendChild(time);
-        text = document.createElement('td');
-        text.classList.add('code',event.channel)
-        text.innerHTML = line;
-        row.appendChild(text);
-        log.appendChild(row);
+  Vue.component('log-item', {
+    props: ['log'],
+    template: '<tr class="code"><td class="time code">{{log.time}}</td><td class="code" v-bind:class="{error: log.channel == \'error\' }">{{ log.message }}</td></tr>'
+  });
+  var app = new Vue({
+    el: '#build',
+    data: {
+      name: #{{@build_result.name.to_json}},
+      dir: #{{@build_result.dir.to_json}},
+      url: "#{url('/build/' +  @build_result.id)}",
+      exception: #{{(@build_result.exception ? @build_result.exception.message : nil ).to_json}},
+      depends: #{{@build_result.depends.map{|r| { name: r.name, dir: r.dir, exception: r.exception, url: url('/build/' +  r.id) }}.to_json}},
+      logs: #{{@sse_logger.logs.to_json}}
+    },
+    methods: {
+      scrollBottom: function() {
+        let scroll = document.getElementById("scroll")
+        if ( scroll.scrollHeight - scroll.scrollTop < 500 ) {
+          scroll.scrollTop = scroll.scrollHeight;
+        }
       }
-    })
-    scroll.scrollTop = scroll.scrollHeight;
-  }
-
-javascript:
-  var serverSentEvent = new EventSource("#{url('/status')}");
-  serverSentEvent.onmessage = function(e) {
-    if ( e.data == "finished" ) {
-      location.reload();
+    },
+    created: function () {
+      let self = this;
+      new EventSource("#{url('/log/stream')}").onmessage = function(e) {
+        self.logs.push(JSON.parse(e.data));
+      }
+      new EventSource("#{url('/status')}").onmessage = function(e) {
+        if ( e.data == "finished" ) {
+          fetch(self.url + "/depends").then((response) => {
+            return response.json().then((json) => {
+              self.depends = json
+            })
+          })
+        }
+      }
+    },
+    updated: function () {
+      this.scrollBottom()
     }
-  }
+  })

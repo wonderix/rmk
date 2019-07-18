@@ -6,51 +6,45 @@ html(lang='en')
     link(rel="stylesheet" href="https://stackpath.bootstrapcdn.com/font-awesome/4.7.0/css/font-awesome.min.css")
     link(rel="stylesheet" href=url("/css/rmk.css"))
     script(src="https://cdnjs.cloudflare.com/ajax/libs/materialize/1.0.0/js/materialize.min.js")
+    script(src="https://cdn.jsdelivr.net/npm/vue/dist/vue.js")
+    
   body
-    nav.blue.darken-2
+    nav.blue.darken-2#header
       .nav-wrapper
-        a.brand-logo.left href=url('/build/root')  Ruby make
+        a.brand-logo.left href=url('/build/root') Ruby make
         div.right
-          a(href="#" onclick="cancel();return false;")
-            i(class="fa fa-cog" id="cog" style="font-size: 200%; margin-right:20px")
+          a(href="#" v-on:click="cancel")
+            i(class="fa fa-cog" v-bind:class="{ 'fa-spin': building }" style="font-size: 200%; margin-right:20px")
         div.right
-          a(href="#" onclick="toggleRunning();return false;")
-            i(class="fa  #{@running.value ? 'fa-pause' : 'fa-play blink'}" id="running" style="font-size: 200%; margin-right:20px")
+          a(href="#" v-on:click="toggleRunning")
+            i(class="fa"  v-bind:class="{ 'fa-pause': running, 'fa-play': !running, 'blink': !running }" style="font-size: 200%; margin-right:20px")
     .body
       == yield
     footer.page-footer.blue.darken-3
       .footer-copyright
         .container
 javascript:
-  var statusSource = new EventSource("#{url('/status')}");
-  var cog = document.getElementById("cog");
-  statusSource.onmessage = function(e) {
-    if ( e.data == "building" ) {
-      cog.classList.add("fa-spin")
-    } else if ( e.data == "finished" ) {
-      cog.classList.remove("fa-spin")
+  var headerApp = new Vue({
+    el: '#header',
+    data: {
+      building: false,
+      running: true
+    },
+    methods: {
+      cancel: function (event) {
+        fetch("#{url('/cancel')}",{ method: 'POST'})
+      },
+      toggleRunning: function () {
+        fetch("#{url('/running/toggle')}",{ method: 'POST'})
+      }
+    },
+    created: function () {
+      var self = this;
+      new EventSource("#{url('/status')}").onmessage = function(e) {
+        self.building = e.data == "building";
+      }
+      new EventSource("#{url('/running')}").onmessage = function(e) {
+        self.running = e.data == "true";
+      }
     }
-  }
-javascript:
-  var runningSource = new EventSource("#{url('/running')}");
-  var running = document.getElementById("running");
-  runningSource.onmessage = function(e) {
-    running.classList.remove('fa-pause','fa-play','blink') 
-    if ( e.data == "false" ) {
-      running.classList.add('fa-play','blink')
-    } else {
-      running.classList.add('fa-pause')
-    }
-  }
-javascript:
-  function cancel() {
-    var xhttp = new XMLHttpRequest();
-    xhttp.open("POST", "#{url('/cancel')}", true);
-    xhttp.send();
-  }
-javascript:
-  function toggleRunning() {
-    var xhttp = new XMLHttpRequest();
-    xhttp.open("POST", "#{url('/running/toggle')}", true);
-    xhttp.send();
-  }
+  })

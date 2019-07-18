@@ -94,12 +94,16 @@ module Rmk
 
       def write(data)
         # $stdout.write(data)
-        log = { channel: @channel, data: data,
-                time: Time.now.strftime('%H:%M:%S') }
-        @logs.shift if @logs.size > 1000
-        @logs << log
-        @connections.each do |c|
-          c << "data: #{log.to_json}\n\n" unless c.closed?
+        data.split("\n").each do |message|
+          next if message.empty?
+
+          log = { channel: @channel, message: message,
+                  time: Time.now.strftime('%H:%M:%S') }
+          @logs.shift if @logs.size > 1000
+          @logs << log
+          @connections.each do |c|
+            c << "data: #{log.to_json}\n\n" unless c.closed?
+          end
         end
       end
     end
@@ -193,6 +197,13 @@ module Rmk
       @logs = @sse_logger.logs
       halt 404 unless @build_result
       slim :build
+    end
+
+    get '/build/:id/depends' do
+      @build_result = @root_build_results.build_results[params['id']]
+      @logs = @sse_logger.logs
+      halt 404 unless @build_result
+      @build_result.depends.map{ |r| { name: r.name, dir: r.dir, exception: r.exception, url: url('/build/' +  r.id) } }.to_json
     end
 
     get '/rebuild/:id' do

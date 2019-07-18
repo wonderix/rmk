@@ -25,6 +25,10 @@
     25% { opacity: 0;}
 }
 
+[v-cloak] {
+    display: none;
+}
+
 .terminal {
     font-family: monospace;
     white-space: pre-wrap;
