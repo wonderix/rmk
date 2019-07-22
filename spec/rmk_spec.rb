@@ -17,82 +17,60 @@ describe File, '#relative_path_from' do
   end
 end
 
-describe Rmk::Tools, '#system' do
-  it 'return stdout' do
+describe Rmk::Tools do
+  around(:each) do |example|
     EventMachine.run do
       Fiber.new do
-        expect(system('echo Hello World')).to eq("Hello World\n")
+        example.run
         EventMachine.stop
       end.resume
     end
   end
-  it 'return stderr in exception' do
-    EventMachine.run do
-      Fiber.new do
-        expect { system('ruby -e "STDERR.puts(%q(Hello World)); exit(1);"') }.to raise_error(Exception, /Hello World/)
-        EventMachine.stop
-      end.resume
-    end
-  end
-  it 'should raise exception in case of exit code non equal to zero' do
-    EventMachine.run do
-      Fiber.new do
-        expect { system('exit 1') }.to raise_error(Exception)
-        EventMachine.stop
-      end.resume
-    end
-  end
-end
 
-Rmk::Tools.trace = false
+  describe '#system' do
 
-describe Rmk::Tools, '#popen3' do
-  it 'return stdout' do
-    EventMachine.run do
-      Fiber.new do
-        out = StringIO.new
-        popen3('echo Hello World', out: out)
-        expect(out.string).to eq("Hello World\n")
-        EventMachine.stop
-      end.resume
+    it 'return stdout' do
+      expect(system('echo Hello World')).to eq("Hello World\n")
+    end
+
+    it 'return stderr in exception' do
+      expect { system('ruby -e "STDERR.puts(%q(Hello World)); exit(1);"') }.to raise_error(Exception, /Hello World/)
+    end
+
+    it 'should raise exception in case of exit code non equal to zero' do
+      expect { system('exit 1') }.to raise_error(Exception)
     end
   end
-  it 'return stderr' do
-    EventMachine.run do
-      Fiber.new do
-        err = StringIO.new
-        popen3(['ruby', '-e', 'STDERR.puts("Hello World")'], err: err)
-        expect(err.string).to eq("Hello World\n")
-        EventMachine.stop
-      end.resume
+
+  Rmk::Tools.trace = false
+
+  describe Rmk::Tools do
+    it 'return stdout' do
+      out = StringIO.new
+      popen3('echo Hello World', out: out)
+      expect(out.string).to eq("Hello World\n")
     end
-  end
-  it 'changes the directory' do
-    EventMachine.run do
-      Fiber.new do
-        out = StringIO.new
-        popen3('pwd', out: out, chdir: '/')
-        expect(out.string).to eq("/\n")
-        EventMachine.stop
-      end.resume
+
+    it 'return stderr' do
+      err = StringIO.new
+      popen3(['ruby', '-e', 'STDERR.puts("Hello World")'], err: err)
+      expect(err.string).to eq("Hello World\n")
     end
-  end
-  it 'accepts stdin_data' do
-    EventMachine.run do
-      Fiber.new do
-        out = StringIO.new
-        popen3('cat', out: out, stdin_data: "Hello World\n")
-        expect(out.string).to eq("Hello World\n")
-        EventMachine.stop
-      end.resume
+
+    it 'changes the directory' do
+      out = StringIO.new
+      popen3('pwd', out: out, chdir: '/')
+      expect(out.string).to eq("/\n")
     end
-  end
-  it 'should raise exception in case of exit code non equal to zero' do
-    EventMachine.run do
-      Fiber.new do
-        expect { popen3('exit 1') }.to raise_error(Exception)
-        EventMachine.stop
-      end.resume
+
+    it 'accepts stdin_data' do
+      out = StringIO.new
+      popen3('cat', out: out, stdin_data: "Hello World\n")
+      expect(out.string).to eq("Hello World\n")
+    end
+
+    it 'should raise exception in case of exit code non equal to zero' do
+      expect { popen3('exit 1') }.to raise_error(Exception)
     end
   end
 end
