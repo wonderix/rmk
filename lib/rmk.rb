@@ -132,6 +132,14 @@ module Rmk
     end
   end
 
+  class BuildError < StandardError
+    attr_reader :dir
+    def initialize(msg,dir)
+      super(msg)
+      @dir = dir
+    end
+  end
+
   module Tools
     class << self
       attr_accessor :pids, :trace
@@ -184,8 +192,8 @@ module Rmk
           connout.notify_readable = true
           connerr.notify_readable = true
           Fiber.yield until connout.closed? && connerr.closed?
-          raise "#{cmd_string}\nKilled" unless Tools.pids.delete(wait_thr.pid)
-          raise "#{cmd_string}\n#{exception_buffer.string}" unless wait_thr.value.exitstatus.zero?
+          raise BuildError.new("#{cmd_string}\nKilled",dir) unless Tools.pids.delete(wait_thr.pid)
+          raise BuildError.new("#{cmd_string}\n#{exception_buffer.string}",dir) unless wait_thr.value.exitstatus.zero?
         ensure
           Tools.pids.delete(wait_thr.pid)
           connout.detach
@@ -360,6 +368,7 @@ module Rmk
 
   class Plan
     BUILD_DIR = '.rmk'
+    include Tools
 
     attr_accessor :md5
     def initialize(build_file_cache, file, md5)
@@ -379,7 +388,7 @@ module Rmk
 
     def self.plugin(name)
       Kernel.require File.join(File.expand_path(File.dirname(File.dirname(__FILE__))), 'plugins', name + '.rb')
-      include const_get(name.capitalize)
+      include const_get(name.split('-').map { |string| string.capitalize }.join)
     end
 
     def job(name, depends, include_depends = [], &block)
@@ -651,9 +660,14 @@ module Rmk
             item = policy.build(jobs)
             Rmk.stdout.write item.result.inspect if Rmk.verbose > 0 # rubocop:disable Metrics/LineLength, Style/NumericPredicate
             Rmk.stdout.write "Build OK\n"
-          rescue StandardError => e
+          rescue BuildError => e
             Rmk.stderr.write(e.message + "\n")
             Rmk.stderr.write(e.backtrace.join("\n")) if Rmk.verbose > 0 # rubocop:disable Metrics/LineLength, Style/NumericPredicate
+            Rmk.stdout.write "Build Failed in #{e.dir}\n"
+            result = 1
+          rescue StandardError => e
+            Rmk.stderr.write(e.message + "\n")
+            Rmk.stderr.write(e.backtrace.join("\n"))
             Rmk.stdout.write "Build Failed\n"
             result = 1
           end

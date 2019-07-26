@@ -7,6 +7,7 @@ require 'find'
 
 require 'yaml'
 
+
 # DockerfileParser main class
 class DockerfileParser
   @commands = %w[FROM MAINTAINER RUN CMD EXPOSE ENV ADD COPY ENTRYPOINT
@@ -65,7 +66,7 @@ end
 module Docker
   include Rmk::Tools
 
-  def docker_build(name, docker_file: 'Dockerfile', docker_dir: '.', depends: [], tag: 'latest', hub: '')
+  def docker_build(name, docker_file: 'Dockerfile', docker_dir: '.', depends: [], tags: ['latest'], hub: '', build_args: {})
     docker_dir = File.join(dir, docker_dir)
     docker_file = File.join(dir, docker_file)
     job("#{hub}#{name}", [docker_file] + depends) do |hidden|
@@ -83,17 +84,23 @@ module Docker
           end
         end
       end
-      docker_tag = "#{hub}#{name}:#{tag}"
-      system("docker build -f #{docker_file} -t #{docker_tag}  #{docker_dir}")
-      docker_tag
+      docker_tags = tags.map{ |tag| "#{hub}#{name}:#{tag}" }
+      build_args_cmd = build_args.to_a.map{ |k,v| "--build-arg #{k}=#{v}" }.join(" ")
+      system("docker build -f #{docker_file} -t #{docker_tags.first} #{build_args_cmd} #{docker_dir} ")
+      docker_tags[1..-1].each do | t |
+        system("docker tag #{docker_tags.first} #{t}")
+      end
+      docker_tags
     end.to_a
   end
 
   def docker_push(depends)
     image = depends.first
     job("docker/#{image.name}", depends) do
-      system("docker push #{image.result}")
-      image.name
+      image.result.each do | tag |
+        system("docker push #{tag}")
+      end
+      image.result
     end.to_a
   end
 end
