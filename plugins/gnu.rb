@@ -94,13 +94,12 @@ module Gnu
   end
 
   def cc(files, depends, options = {})
-    result = []
     return inc([dir], options) if files.empty?
 
     local_includes = files.map { |x| '-I' + File.dirname(x) }.uniq
-    files.each do |cpp|
+    files.map do |cpp|
       basename, = File.basename(cpp.to_s).split('.')
-      result << job(basename + '.o', [cpp], depends) do |hidden|
+      job(basename + '.o', cpp, depends) do |hidden|
         flags = []
         depends.each do |d|
           d = d.result
@@ -128,11 +127,10 @@ module Gnu
         result
       end
     end
-    result
   end
 
   def ar(name, depends, _options = {})
-    result = job('lib' + name + '.a', depends) do
+    job('lib' + name + '.a', depends) do
       target_dir = File.join(build_dir, TARGET)
       FileUtils.mkdir_p(target_dir)
       lib = Cpp::Archive.new(File.join(target_dir, 'lib' + name + '.a'))
@@ -149,11 +147,10 @@ module Gnu
       system("ar -cr  #{lib} #{objflags.join(' ')}  ")
       lib
     end
-    [result]
   end
 
   def ld(name, depends, _options = {})
-    result = job(name, depends) do
+    job(name, depends) do
       target_dir = File.join(build_dir, TARGET)
       FileUtils.mkdir_p(target_dir)
       ofile = File.join(target_dir, name)
@@ -175,12 +172,11 @@ module Gnu
       system("g++ #{objflags.join(' ')} #{start_group} #{libflags.join(' ')} #{end_group}  -o #{ofile} ")
       ofile
     end
-    [result]
   end
 
   def ld_shared(name, depends, _options = {})
     name = 'lib' + name + '.so'
-    result = job(name, depends) do
+    job(name, depends) do
       target_dir = File.join(build_dir, TARGET)
       FileUtils.mkdir_p(target_dir)
       libflags = []
@@ -204,6 +200,5 @@ module Gnu
       system("g++ -shared -Wl,-soname=#{name} #{objflags.join(' ')} #{start_group} #{libflags.join(' ')} #{end_group}  -o #{lib} ")
       lib
     end
-    [result]
   end
 end

@@ -155,20 +155,14 @@ The following method extracts all strings from a given file
 #include support for system command
 include Tools
 
-def strings(jobs)
+def strings(*jobs)
   # create new work item and pass all dependencies
   # when this item needs to be rebuild the given block is called
-  job("strings",jobs) do
-    result = []
-    # iterate of all items
-    jobs.each do | item |
-      txt = item.result + ".txt"
-      system("strings #{item.result} > #{txt}")
-      result << txt
+  job('strings', jobs) do
+    jobs.map do |item|
+      capture2("strings #{item.result}")
     end
-    # return result from block
-    result
-  end.to_a
+  end
 end
 ```
 

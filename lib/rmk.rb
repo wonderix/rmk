@@ -405,7 +405,7 @@ module Rmk
     def file(name)
       return File.join(@dir, name) if name.is_a?(String)
 
-      name.to_a.map { |x| File.join(@dir, x) }
+      name.map { |x| File.join(@dir, x) }
     end
 
     def to_s
@@ -651,6 +651,7 @@ module Rmk
       EventMachine.run do
         Fiber.new do
           jobs ||= load_jobs
+          jobs = jobs.is_a?(Array) ? jobs.flatten : [jobs]
           jobs.each(&:reset)
           begin
             item = policy.build(jobs)

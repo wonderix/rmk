@@ -22,7 +22,7 @@ module Go
         ENV.delete('GOOS') if goos
       end
       output
-    end.to_a
+    end
   end
 
   def go_lint(package)

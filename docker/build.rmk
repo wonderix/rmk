@@ -11,7 +11,7 @@ def gem
     gem_tgz = File.join(build_dir, Regexp.last_match(1))
     FileUtils.mv(file(File.join('..', Regexp.last_match(1))), gem_tgz)
     gem_tgz
-  end.to_a
+  end
 end
 
 def all

@@ -84,13 +84,13 @@ module Docker
         end
       end
       docker_tags = tags.map { |tag| "#{hub}#{name}:#{tag}" }
-      build_args_cmd = build_args.to_a.map { |k, v| "--build-arg #{k}=#{v}" }.join(' ')
+      build_args_cmd = build_args.map { |k, v| "--build-arg #{k}=#{v}" }.join(' ')
       system("docker build -f #{docker_file} -t #{docker_tags.first} #{build_args_cmd} #{docker_dir} ")
       docker_tags[1..-1].each do |t|
         system("docker tag #{docker_tags.first} #{t}")
       end
       docker_tags
-    end.to_a
+    end
   end
 
   def docker_push(depends)
@@ -100,6 +100,6 @@ module Docker
         system("docker push #{tag}")
       end
       image.result
-    end.to_a
+    end
   end
 end

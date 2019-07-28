@@ -5,20 +5,14 @@ include Tools
 plugin 'docker'
 plugin 'go'
 
-def strings(jobs)
+def strings(*jobs)
   # create new work item and pass all dependencies
   # when this item needs to be rebuild the given block is called
   job('strings', jobs) do
-    result = []
-    # iterate of all items
-    jobs.each do |item|
-      txt = item.result + '.txt'
-      system("strings #{item.result} > #{txt}")
-      result << txt
+    jobs.map do |item|
+      capture2("strings #{item.result}")
     end
-    # return result from block
-    result
-  end.to_a
+  end
 end
 
 def image
@@ -26,7 +20,7 @@ def image
 end
 
 def all
-  strings(project('main').compile_cpp + compile_go) + project('main').compile_java # + image()
+  [strings(project('main').compile_cpp, compile_go), project('main').compile_java] # + image()
 end
 
 def compile_go
