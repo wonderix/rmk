@@ -2,6 +2,9 @@
 Metrics/LineLength:
   Max: 120
 
+Metrics/MethodLength:
+  Max: 50
+
 AllCops:
   Include:
     - foo.unusual_extension

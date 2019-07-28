@@ -220,20 +220,19 @@ module Rmk
       @threads || 100
     end
 
-    attr_reader :name, :plan, :depends, :block, :include_depends, :file
+    attr_reader :name, :plan, :depends, :block, :file
     attr_accessor :exception
-    def initialize(name, plan, depends, include_depends, &block)
+    def initialize(name, plan, depends, &block)
       depends = [depends] unless depends.is_a?(Array)
       @name = name
       @plan = plan
-      @depends = depends
-      @include_depends = include_depends
+      @depends = depends.flatten
       @block = block
       @result = nil
       @exception = nil
       md5 = Digest::MD5.new
       md5.update(plan.md5)
-      sources.each { |s| md5.update(s.to_s); }
+      recursive_explicit_dependencies.each { |s| md5.update(s.to_s); }
       @file = File.join(plan.build_dir, "cache/#{@name}/#{md5.hexdigest}")
     end
 
@@ -255,9 +254,9 @@ module Rmk
           File.delete(@file) if File.readable?(@file)
         end
         begin
-          @headers = File.open(@file + '.dep', 'rb') { |f| Marshal.load(f) }
+          @recursive_implicit_dependencies = File.open(@file + '.dep', 'rb') { |f| Marshal.load(f) }
         rescue Errno::ENOENT
-          @headers = nil
+          @recursive_implicit_dependencies = nil
         rescue StandardError
           puts "Removing #{@file + '.dep'}"
           File.delete(@file + '.dep') if File.readable?(@file + '.dep')
@@ -278,11 +277,11 @@ module Rmk
       File.mtime(@file)
     end
 
-    def import(result, headers)
+    def import(result, recursive_implicit_dependencies)
       @result = result
-      @headers = {}
-      headers.each do |key, _value|
-        @headers[key] = true
+      @recursive_implicit_dependencies = {}
+      recursive_implicit_dependencies.each do |key, _value|
+        @recursive_implicit_dependencies[key] = true
       end
       save(@result)
     end
@@ -290,7 +289,7 @@ module Rmk
     def save(result)
       FileUtils.mkdir_p(File.dirname(@file))
       File.open(@file, 'wb') { |f| Marshal.dump(result, f) }
-      File.open(@file + '.dep', 'wb') { |f| Marshal.dump(@headers, f) } if @headers && !@headers.empty?
+      File.open(@file + '.dep', 'wb') { |f| Marshal.dump(@recursive_implicit_dependencies, f) } if @recursive_implicit_dependencies && !@recursive_implicit_dependencies.empty?
       result
     end
 
@@ -309,15 +308,15 @@ module Rmk
 
     def build(policy)
       begin
-        policy.build(depends + include_depends)
+        policy.build(depends)
       rescue StandardError => e
         @exception = e
         raise e
       end
       @result = Future.new(@name) do
-        headers
+        recursive_implicit_dependencies
         depends.map(&:result)
-        result = @block.call(@headers)
+        result = @block.call(@recursive_implicit_dependencies)
         save(result)
       end
       return result if Job.threads == 1
@@ -325,28 +324,28 @@ module Rmk
       @result
     end
 
-    def sources(result = nil)
-      unless @sources
-        @sources = {}
+    def recursive_explicit_dependencies(result = nil)
+      unless @recursive_explicit_dependencies
+        @recursive_explicit_dependencies = {}
         @depends.each do |d|
           if d.is_a?(Job)
-            d.sources(@sources)
+            d.recursive_explicit_dependencies(@recursive_explicit_dependencies)
           else
-            @sources[d.to_s] = d
+            @recursive_explicit_dependencies[d.to_s] = d
           end
         end
       end
-      result ? result.merge!(@sources) : @sources.values
+      result ? result.merge!(@recursive_explicit_dependencies) : @recursive_explicit_dependencies.values
     end
 
-    def headers(result = nil)
-      unless @headers
-        @headers = {}
+    def recursive_implicit_dependencies(result = nil)
+      unless @recursive_implicit_dependencies
+        @recursive_implicit_dependencies = {}
         @depends.each do |d|
-          d.headers(@headers) if d.is_a?(Job)
+          d.recursive_implicit_dependencies(@recursive_implicit_dependencies) if d.is_a?(Job)
         end
       end
-      result ? result.merge!(@headers) : @headers.keys
+      result ? result.merge!(@recursive_implicit_dependencies) : @recursive_implicit_dependencies.keys
     end
 
     def to_s
@@ -391,8 +390,8 @@ module Rmk
       include const_get(name.split('-').map(&:capitalize).join)
     end
 
-    def job(name, depends, include_depends = [], &block)
-      Job.new(name, self, depends, include_depends, &block)
+    def job(name, *depends, &block)
+      Job.new(name, self, depends, &block)
     end
 
     def glob(pattern)
@@ -505,7 +504,7 @@ module Rmk
         if job.last_result
           rebuild = false
           mtime = job.mtime
-          (job.sources + job.headers).each do |d|
+          (job.recursive_explicit_dependencies + job.recursive_implicit_dependencies).each do |d|
             dmtime = d.respond_to?(:mtime) ? d.mtime : File.mtime(d)
             next unless dmtime > mtime
             raise "Rebuilding #{job.name}(#{mtime}) because #{Tools.relative(d)}(#{dmtime}) is newer" if @readonly
@@ -587,11 +586,11 @@ module Rmk
     end
 
     def cache(job, &block)
-      sources = job.sources
-      sources << job.plan.to_s
+      recursive_explicit_dependencies = job.recursive_explicit_dependencies
+      recursive_explicit_dependencies << job.plan.to_s
 
       id = Digest::MD5.new
-      sources.sort.each do |k|
+      recursive_explicit_dependencies.sort.each do |k|
         id.update(k)
         id.update(md5(k))
       end
@@ -599,9 +598,9 @@ module Rmk
       result = nil
       begin
         JSON.parse(get(File.join(job.name, id, 'index'))).each do |entries|
-          entries.each do |hid, headers|
+          entries.each do |hid, recursive_implicit_dependencies|
             found = true
-            headers.each do |file, x|
+            recursive_implicit_dependencies.each do |file, x|
               found &&= (md5(file) == x)
             end
             next unless found
@@ -610,7 +609,7 @@ module Rmk
             FileUtils.mkdir_p(File.dirname(result))
             File.open(result, 'wb') { |f| f.write(get(File.join(job.name, id, hid + '.bin'))) }
             puts("GET #{result}")
-            job.import(result, headers)
+            job.import(result, recursive_implicit_dependencies)
             break
           end
         end
@@ -622,12 +621,12 @@ module Rmk
       return if job.result
 
       block.call
-      headers = {}
+      recursive_implicit_dependencies = {}
       hid = Digest::MD5.new
-      job.headers.sort.each do |k|
+      job.recursive_implicit_dependencies.sort.each do |k|
         hid.update(k)
         x = md5(k)
-        headers[k] = x
+        recursive_implicit_dependencies[k] = x
         hid.update(x)
       end
       hid = hid.hexdigest
@@ -635,7 +634,7 @@ module Rmk
 
       put(File.join(job.name, id, hid + '.json'), { 'result' => job.result }.to_json)
       put(File.join(job.name, id, hid + '.bin'), File.open(job.result, 'rb', &:read))
-      put(File.join(job.name, id, hid + '.dep'), { hid => headers }.to_json)
+      put(File.join(job.name, id, hid + '.dep'), { hid => recursive_implicit_dependencies }.to_json)
     end
   end
 
