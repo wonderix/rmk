@@ -155,12 +155,12 @@ The following method extracts all strings from a given file
 #include support for system command
 include Tools
 
-def strings(*jobs)
-  # create new work item and pass all dependencies
+ef strings(*binaries)
+  # create new job and pass all dependencies
   # when this item needs to be rebuild the given block is called
-  job('strings', jobs) do
-    jobs.map do |item|
-      capture2("strings #{item.result}")
+  job('strings', binaries) do
+    binaries.map do |binary|
+      capture2("strings #{binary.result}")
     end
   end
 end
