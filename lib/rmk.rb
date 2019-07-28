@@ -164,9 +164,7 @@ module Rmk
     Tools.trace = true
 
     def system(cmd, chdir: nil)
-      out = StringIO.new
-      popen3(cmd, out: Tee.new(out, Rmk.stdout), chdir: chdir)
-      out.string
+      popen3(cmd, out: Rmk.stdout, chdir: chdir)
     end
 
     def capture2(cmd, chdir: nil, trace: false)

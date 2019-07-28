@@ -4,14 +4,12 @@ plugin 'docker'
 
 def gem
   job('rmk.gem', []) do
-    output = system('gem build rmk.gemspec', chdir: file('..'))
-    if output =~ /File:\s+(.*)\n/
-      FileUtils.mkdir_p(build_dir)
-      gem_tgz = File.join(build_dir, Regexp.last_match(1))
-      FileUtils.mv(file(File.join('..', Regexp.last_match(1))), gem_tgz)
-    else
-      raise 'File: not found in output of gem build'
-    end
+    output = capture2('gem build rmk.gemspec', chdir: file('..'))
+    raise 'File: not found in output of gem build' unless output =~ /File:\s+(.*)\n/
+
+    FileUtils.mkdir_p(build_dir)
+    gem_tgz = File.join(build_dir, Regexp.last_match(1))
+    FileUtils.mv(file(File.join('..', Regexp.last_match(1))), gem_tgz)
     gem_tgz
   end.to_a
 end

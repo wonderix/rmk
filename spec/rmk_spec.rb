@@ -29,7 +29,7 @@ describe Rmk::Tools do
 
   describe '#system' do
     it 'return stdout' do
-      expect(system('echo Hello World')).to eq("Hello World\n")
+      expect(capture2('echo Hello World')).to eq("Hello World\n")
     end
 
     it 'return stderr in exception' do
