@@ -379,6 +379,19 @@ module Rmk
       @build_file_cache.load(file, @dir)
     end
 
+    def self.job_method(*symbols)
+      symbols.each do |sym|
+        proxy = Module.new do
+          define_method(sym) do |*args|
+            job(sym.to_s, args) do
+              super *args
+            end
+          end
+        end
+        prepend proxy
+      end
+    end
+    
     def self.plugin(name)
       Kernel.require File.join(File.expand_path(File.dirname(File.dirname(__FILE__))), 'plugins', name + '.rb')
       include const_get(name.split('-').map(&:capitalize).join)

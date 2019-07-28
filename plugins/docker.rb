@@ -94,7 +94,7 @@ module Docker
   end
 
   def docker_push(tags)
-    job("docker/#{tags.first}", tags) do
+    job("docker/#{tags.name}", tags) do
       tags do |tag|
         system("docker push #{tag}")
       end
