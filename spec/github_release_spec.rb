@@ -1,3 +1,4 @@
+# frozen_string_literal: true
 
 require_relative '../lib/rmk.rb'
 require_relative '../plugins/github-release.rb'
@@ -5,7 +6,6 @@ require_relative '../plugins/github-release.rb'
 include GithubRelease
 
 describe GithubRelease do
-
   around(:each) do |example|
     EventMachine.run do
       Fiber.new do
@@ -16,7 +16,7 @@ describe GithubRelease do
   end
 
   it 'returns last release' do
-    release = github_release('istio','istio') 
+    release = github_release('istio', 'istio')
     expect(release[0].result.tag_name).to match(/\d+\.\d+\.\d+/)
   end
 end

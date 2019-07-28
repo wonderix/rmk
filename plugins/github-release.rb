@@ -1,14 +1,15 @@
+# frozen_string_literal: true
+
 require 'github_api'
 require 'time'
 
 module GithubRelease
-
   class ReleaseSpec
     attr_accessor :tag, :created_at
   end
 
   class Release
-    def initialize(github,org,repo)
+    def initialize(github, org, repo)
       @github = github
       @org = org
       @repo = repo
@@ -19,7 +20,7 @@ module GithubRelease
     end
 
     def result
-      @github.repos.releases.latest(@org, @repo).body 
+      @github.repos.releases.latest(@org, @repo).body
     end
 
     def to_s
@@ -27,11 +28,10 @@ module GithubRelease
     end
   end
 
-  def github_release(org,repo)
+  def github_release(org, repo)
     github = Github.new do |config|
       yield(config) if block_given?
     end
-    [Release.new(github,org,repo)]
+    [Release.new(github, org, repo)]
   end
-
 end

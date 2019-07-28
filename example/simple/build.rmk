@@ -1,5 +1,6 @@
+# frozen_string_literal: true
 
-#include support for system command
+# include support for system command
 include Tools
 plugin 'docker'
 plugin 'go'
@@ -7,11 +8,11 @@ plugin 'go'
 def strings(jobs)
   # create new work item and pass all dependencies
   # when this item needs to be rebuild the given block is called
-  job("strings",jobs) do
+  job('strings', jobs) do
     result = []
     # iterate of all items
-    jobs.each do | item |
-      txt = item.result + ".txt"
+    jobs.each do |item|
+      txt = item.result + '.txt'
       system("strings #{item.result} > #{txt}")
       result << txt
     end
@@ -20,14 +21,14 @@ def strings(jobs)
   end.to_a
 end
 
-def image()
-  docker_push(docker_build('example', hub: 'wonderix/', depends: project("main").compile_cpp()))
+def image
+  docker_push(docker_build('example', hub: 'wonderix/', depends: project('main').compile_cpp))
 end
 
-def all()
-  strings(project("main").compile_cpp()+ compile_go()) + project("main").compile_java() # + image()
+def all
+  strings(project('main').compile_cpp + compile_go) + project('main').compile_java # + image()
 end
 
-def compile_go()
-  go_build("main",".")
+def compile_go
+  go_build('main', '.')
 end

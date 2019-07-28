@@ -1,6 +1,5 @@
+# frozen_string_literal: true
 
-
-
-def all()
-  project("example/simple").all()
+def all
+  project('example/simple').all
 end

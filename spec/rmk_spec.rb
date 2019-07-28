@@ -28,7 +28,6 @@ describe Rmk::Tools do
   end
 
   describe '#system' do
-
     it 'return stdout' do
       expect(system('echo Hello World')).to eq("Hello World\n")
     end

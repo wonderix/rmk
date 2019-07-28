@@ -177,12 +177,11 @@ module Rmk
     end
 
     def enqueue_build(policy: nil, interval: @build_interval, jobs: nil)
-      @queue.push({ policy: policy, interval: interval, jobs: jobs }) # rubocup:disable Style/BracesAroundHashParameters, Metrics/LineLength
+      @queue.push(policy: policy, interval: interval, jobs: jobs) # rubocup:disable Style/BracesAroundHashParameters, Metrics/LineLength
       @queue.pop do |options|
         build(**options)
       end
     end
-
 
     configure do
       set :threaded, false
@@ -203,7 +202,7 @@ module Rmk
       @build_result = @root_build_results.build_results[params['id']]
       @logs = @sse_logger.logs
       halt 404 unless @build_result
-      @build_result.depends.map{ |r| { name: r.name, dir: r.dir, exception: r.exception, url: url('/build/' +  r.id) } }.to_json
+      @build_result.depends.map { |r| { name: r.name, dir: r.dir, exception: r.exception, url: url('/build/' + r.id) } }.to_json
     end
 
     get '/rebuild/:id' do
@@ -236,7 +235,6 @@ module Rmk
     post '/cancel' do
       Tools.killall
     end
-
 
     get '/log/stream', provides: 'text/event-stream' do
       stream(:keep_open) do |out|

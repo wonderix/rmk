@@ -7,7 +7,6 @@ require 'find'
 
 require 'yaml'
 
-
 # DockerfileParser main class
 class DockerfileParser
   @commands = %w[FROM MAINTAINER RUN CMD EXPOSE ENV ADD COPY ENTRYPOINT
@@ -84,10 +83,10 @@ module Docker
           end
         end
       end
-      docker_tags = tags.map{ |tag| "#{hub}#{name}:#{tag}" }
-      build_args_cmd = build_args.to_a.map{ |k,v| "--build-arg #{k}=#{v}" }.join(" ")
+      docker_tags = tags.map { |tag| "#{hub}#{name}:#{tag}" }
+      build_args_cmd = build_args.to_a.map { |k, v| "--build-arg #{k}=#{v}" }.join(' ')
       system("docker build -f #{docker_file} -t #{docker_tags.first} #{build_args_cmd} #{docker_dir} ")
-      docker_tags[1..-1].each do | t |
+      docker_tags[1..-1].each do |t|
         system("docker tag #{docker_tags.first} #{t}")
       end
       docker_tags
@@ -97,7 +96,7 @@ module Docker
   def docker_push(depends)
     image = depends.first
     job("docker/#{image.name}", depends) do
-      image.result.each do | tag |
+      image.result.each do |tag|
         system("docker push #{tag}")
       end
       image.result

@@ -46,9 +46,7 @@ module Go
         pkg = Regexp.last_match(1).sub(%r{[^\/]*\/[^\/]*\/[^\/]*\/*}, '')
         pkg = '.' if pkg.empty?
         limit = limits[pkg] || 0.0
-        if percent < limit
-          raise "Coverage for package #{pkg} (#{percent}%) fallen below #{limit}%"
-        end
+        raise "Coverage for package #{pkg} (#{percent}%) fallen below #{limit}%" if percent < limit
       end
       go_hidden(files, package, hidden)
       output

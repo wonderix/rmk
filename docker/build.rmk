@@ -1,21 +1,21 @@
+# frozen_string_literal: true
+
 plugin 'docker'
 
-
-def gem()
-  job('rmk.gem',[]) do
-    output = system("gem build rmk.gemspec",chdir: file('..'))
+def gem
+  job('rmk.gem', []) do
+    output = system('gem build rmk.gemspec', chdir: file('..'))
     if output =~ /File:\s+(.*)\n/
       FileUtils.mkdir_p(build_dir)
-      gem_tgz = File.join(build_dir,$1)
-      FileUtils.mv(file(File.join('..',$1)),gem_tgz)
+      gem_tgz = File.join(build_dir, Regexp.last_match(1))
+      FileUtils.mv(file(File.join('..', Regexp.last_match(1))), gem_tgz)
     else
-      raise "File: not found in output of gem build"
+      raise 'File: not found in output of gem build'
     end
     gem_tgz
   end.to_a
 end
 
-
-def all()
-  docker_push(docker_build('rmk', hub: 'wonderix/', depends: gem()))
+def all
+  docker_push(docker_build('rmk', hub: 'wonderix/', depends: gem))
 end

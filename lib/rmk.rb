@@ -64,7 +64,7 @@ module Rmk
       @delegate = delegate
     end
 
-    def method_missing(m, *args, &block) # rubocop:disable MethodMissingSuper, MissingRespondToMissing, LineLength
+    def method_missing(m, *args, &block) # rubocop:disable MethodMissingSuper, MissingRespondToMissing
       key = m.to_s + args.to_s
       begin
         @cache[key] ||= @delegate.send(m, *args, &block)
@@ -104,7 +104,7 @@ module Rmk
   end
 
   module Popen3Reader
-    def initialize(out,fiber)
+    def initialize(out, fiber)
       @out = out
       @fiber = fiber
       @closed = false
@@ -134,7 +134,7 @@ module Rmk
 
   class BuildError < StandardError
     attr_reader :dir
-    def initialize(msg,dir)
+    def initialize(msg, dir)
       super(msg)
       @dir = dir
     end
@@ -150,7 +150,7 @@ module Rmk
       end
 
       def killall
-        pids.each do |pid, command|
+        pids.each do |pid, _command|
           begin
             Process.kill('TERM', pid)
           rescue Errno::ESRCH # rubocop:disable Lint/HandleExceptions
@@ -192,8 +192,8 @@ module Rmk
           connout.notify_readable = true
           connerr.notify_readable = true
           Fiber.yield until connout.closed? && connerr.closed?
-          raise BuildError.new("#{cmd_string}\nKilled",dir) unless Tools.pids.delete(wait_thr.pid)
-          raise BuildError.new("#{cmd_string}\n#{exception_buffer.string}",dir) unless wait_thr.value.exitstatus.zero?
+          raise BuildError.new("#{cmd_string}\nKilled", dir) unless Tools.pids.delete(wait_thr.pid)
+          raise BuildError.new("#{cmd_string}\n#{exception_buffer.string}", dir) unless wait_thr.value.exitstatus.zero?
         ensure
           Tools.pids.delete(wait_thr.pid)
           connout.detach
@@ -359,7 +359,7 @@ module Rmk
 
     def reset
       @result = nil
-      @last_result= nil
+      @last_result = nil
       @depends.each do |d|
         d.reset if d.is_a?(Job)
       end
@@ -388,7 +388,7 @@ module Rmk
 
     def self.plugin(name)
       Kernel.require File.join(File.expand_path(File.dirname(File.dirname(__FILE__))), 'plugins', name + '.rb')
-      include const_get(name.split('-').map { |string| string.capitalize }.join)
+      include const_get(name.split('-').map(&:capitalize).join)
     end
 
     def job(name, depends, include_depends = [], &block)
@@ -485,7 +485,6 @@ module Rmk
       jobs.map(&:result)
     end
   end
-
 
   class ModificationTimeBuildPolicy
     def initialize(readonly = false)
