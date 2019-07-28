@@ -100,18 +100,13 @@ module Gnu
     files.map do |cpp|
       basename, = File.basename(cpp.to_s).split('.')
       job(basename + '.o', cpp, depends) do |hidden|
-        flags = []
-        depends.each do |d|
-          d = d.result
-          flags.concat(d.flags) if d.respond_to?(:flags)
-        end
-        flags.uniq!
+        flags = depends.select { |d| d.respond_to?(:flags) }.flat_map(&:flags).uniq
         target_dir = File.join(build_dir, TARGET)
         ofile = File.join(target_dir, basename + '.o')
         dfile = File.join(target_dir, basename + '.d')
         FileUtils.mkdir_p(target_dir)
         lang = cpp[-2, 2] == '.c' ? 'c' : 'c++'
-        system("gcc -x #{lang} #{options[:flags]} #{local_includes.join(' ')} -fPIC -o #{ofile} #{flags.join(' ')} -MD -c #{cpp.result}")
+        system("gcc -x #{lang} #{options[:flags]} #{local_includes.join(' ')} -fPIC -o #{ofile} #{flags.join(' ')} -MD -c #{cpp}")
         content = File.read(dfile)
         File.delete(dfile)
         content.gsub!(%r{\b[A-Z]:\/}i, '/')
@@ -135,7 +130,7 @@ module Gnu
       FileUtils.mkdir_p(target_dir)
       lib = Cpp::Archive.new(File.join(target_dir, 'lib' + name + '.a'))
       objflags = []
-      depends.map(&:result).each do |d|
+      depends.each do |d|
         lib.flags.concat(d.flags) if d.respond_to?(:flags)
         case d
         when Cpp::ObjectFile
@@ -156,7 +151,7 @@ module Gnu
       ofile = File.join(target_dir, name)
       libflags = []
       objflags = []
-      depends.map(&:result).each do |d|
+      depends.each do |d|
         case d
         when Cpp::Archive, Cpp::SharedLibrary
           libflags << "-Wl,-rpath,#{File.dirname(d)}" if d.is_a?(Cpp::SharedLibrary)
@@ -182,7 +177,7 @@ module Gnu
       libflags = []
       objflags = []
       flags = []
-      depends.map(&:result).each do |d|
+      depends.each do |d|
         flags.concat(d.flags) if d.respond_to?(:flags)
         case d
         when Cpp::Archive, Cpp::SharedLibrary

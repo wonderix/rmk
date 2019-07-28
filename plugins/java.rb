@@ -13,8 +13,7 @@ module Java
       classes_dir = File.join(build_dir, 'classes')
       FileUtils.rm_rf(classes_dir)
       FileUtils.mkdir_p(classes_dir)
-      jarfiles = jarfiles.to_a.map(&:result)
-      files = files.map(&:result)
+      jarfiles = [jarfiles] unless jarfiles.is_a?(Array)
       system("javac -cp #{jarfiles.join(':')} -d #{classes_dir} #{files.join(' ')}")
       Dir.glob(File.join(classes_dir, '**/*.class'))
     end
@@ -26,7 +25,6 @@ module Java
       result = File.join(lib_dir, name + '.jar')
       classes_dir = File.join(build_dir, 'classes')
       FileUtils.mkdir_p(lib_dir)
-      classfiles = classfiles.to_a.map(&:result).flatten
       file = Tempfile.new('jar')
       classfiles.each do |cls|
         file.puts("-C #{classes_dir} #{File.relative_path_from(cls, classes_dir)}")

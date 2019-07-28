@@ -35,18 +35,6 @@ class File
   end
 end
 
-class String
-  def result
-    self
-  end
-end
-
-class Array
-  def result
-    self
-  end
-end
-
 module Rmk
   class << self
     attr_accessor :stderr, :stdout, :verbose
@@ -212,6 +200,9 @@ module Rmk
   class Job
     class << self
       attr_writer :threads
+      def results(jobs)
+        jobs.map { |j| j.is_a?(Rmk::Job) ? j.result : j }
+      end
     end
 
     def self.threads
@@ -313,9 +304,14 @@ module Rmk
       end
       @result = Future.new(@name) do
         recursive_implicit_dependencies
-        depends.map(&:result)
-        result = @block.call(@recursive_implicit_dependencies)
-        save(result)
+        depends.select { |d| d.is_a?(Rmk::Job) }.each(&:result)
+        bdg = @block.binding
+        bdg.local_variables.each do |l|
+          value = bdg.local_variable_get(l)
+          bdg.local_variable_set(l, value.result) if value.is_a?(Rmk::Job)
+          bdg.local_variable_set(l, value.map { |v| v.is_a?(Rmk::Job) ? v.result : v }) if value.is_a?(Array)
+        end
+        save(@block.call(@recursive_implicit_dependencies))
       end
       return result if Job.threads == 1
 
@@ -479,7 +475,7 @@ module Rmk
 
         job.build(self) unless job.result
       end
-      jobs.map(&:result)
+      Job.results(jobs)
     end
   end
 
@@ -493,11 +489,13 @@ module Rmk
     end
 
     def build(jobs)
+      rebuild_jobs = []
       jobs.each do |job|
         next unless job.is_a?(Job)
 
         next if job.result
 
+        rebuild_jobs << job
         rebuild = true
         if job.last_result
           rebuild = false
@@ -524,7 +522,7 @@ module Rmk
           job.use_last_result
         end
       end
-      jobs.map(&:result)
+      rebuild_jobs.map(&:result)
     end
   end
 
@@ -655,7 +653,7 @@ module Rmk
           jobs.each(&:reset)
           begin
             item = policy.build(jobs)
-            Rmk.stdout.write item.result.inspect if Rmk.verbose > 0 # rubocop:disable Metrics/LineLength, Style/NumericPredicate
+            Rmk.stdout.write Rmk::Job.results(item).inspect if Rmk.verbose > 0 # rubocop:disable Metrics/LineLength, Style/NumericPredicate
             Rmk.stdout.write "Build OK\n"
           rescue BuildError => e
             Rmk.stderr.write(e.message + "\n")

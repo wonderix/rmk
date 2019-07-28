@@ -160,7 +160,7 @@ ef strings(*binaries)
   # when this item needs to be rebuild the given block is called
   job('strings', binaries) do
     binaries.map do |binary|
-      capture2("strings #{binary.result}")
+      capture2("strings #{binary}")
     end
   end
 end

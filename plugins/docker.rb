@@ -93,13 +93,12 @@ module Docker
     end
   end
 
-  def docker_push(depends)
-    image = depends.first
-    job("docker/#{image.name}", depends) do
-      image.result.each do |tag|
+  def docker_push(tags)
+    job("docker/#{tags.first}", tags) do
+      tags do |tag|
         system("docker push #{tag}")
       end
-      image.result
+      tags
     end
   end
 end
