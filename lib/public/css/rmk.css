@@ -57,3 +57,11 @@
 	-o-user-select:none;
 	user-select: none;
 }
+
+.item {
+  cursor: pointer;
+}
+.bold {
+  font-weight: bold;
+}
+  
