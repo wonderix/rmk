@@ -38,7 +38,7 @@ module Go
     files = go_files(package, true)
     result << job('go/coverage', files) do |hidden|
       output = File.join(build_dir, 'coverage')
-      coverage = StringIO.new(system("go test -cover -mod=#{mod} #{package}"))
+      coverage = StringIO.new(capture2("go test -cover -mod=#{mod} #{package}"))
       while (line = coverage.gets)
         next unless line =~ /ok\s+(\S+)\s+.*coverage:\s+(\d+\.\d+)%/
 

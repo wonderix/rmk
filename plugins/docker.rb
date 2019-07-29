@@ -68,7 +68,7 @@ module Docker
   def docker_build(name, docker_file: 'Dockerfile', docker_dir: '.', depends: [], tags: ['latest'], hub: '', build_args: {})
     docker_dir = File.join(dir, docker_dir)
     docker_file = File.join(dir, docker_file)
-    job("#{hub}#{name}", [docker_file] + depends) do |hidden|
+    job("#{hub}#{name}", docker_file, depends) do |hidden|
       DockerfileParser.load_file(docker_file).each do |cmd|
         case cmd[:command]
         when 'COPY', 'ADD'
@@ -95,10 +95,10 @@ module Docker
 
   def docker_push(tags)
     job("docker/#{tags.name}", tags) do
-      tags do |tag|
+      tags.each do |tag|
         system("docker push #{tag}")
       end
-      tags
+      tags.first
     end
   end
 end
