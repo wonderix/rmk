@@ -1,30 +1,17 @@
 template#item-template
   li.browser-default
-    div(v-on:click="toggle" v-bind:class="{bold: isFolder}")
-      span() {{ node.name }} {{ node.dir }}
-      span(v-if="isFolder") [ {{ isOpen ? '-' : '+' }} ]
+    div(v-on:click="toggle" v-bind:class="{ error: node.exception, ok: !node.exception}" )
+      span(v-bind:class="{bold: isFolder}" style ="font-size: 150%") {{ node.name }} 
+      span(style ="padding-left: 10px; font-size: 80%") {{ node.dir }}
+      span(v-if="isFolder" ) [ {{ isOpen ? '-' : '+' }} ]
     ul.browser-default(v-if="isFolder" v-show="isOpen")
-      tree-item(class="item" v-for="(child, index) in edges" :key="index" :nodeId="child" :graph="graph" )
+      tree-item(class="item" v-for="(child, index) in node.depends" :key="index" :node="graph[child]" :graph="graph" )
 div
-  ul#demo
-    tree-item(class="item" :graph="graph" :nodeId="nodeId")
   #build
-    h3
-      span() {{name}}
-      span(style ="padding-left: 10px; font-size: 50%") {{ dir }}
-      div.right
-        a.repeat(href=url("/rebuild/#{@build_result.id}"))
-          i(class="fa fa-repeat" style ="font-size: 50%;  margin-right:20px")
     ul
-      li(v-for="depend in depends")
-        a(v-bind:href="depend.url" v-bind:class="{ error: depend.exception, ok: !depend.exception}")
-          span() {{ depend.name }}
-          span(style ="padding-left: 10px; font-size: 80%") {{ depend.dir }}
-
-    div(v-if="exception" v-cloak="")
-      h5 Error
-      .terminal
-        .error() {{ exception }}
+      tree-item(class="item" :graph="graph" :node="graph['root']")
+    div.terminal(v-if="node.exception" v-cloak="")
+      .error() {{ node.exception }}
     h5 Logs
     div#scroll(style="overflow-y: scroll; height:400px;")
       table.terminal.code
@@ -37,7 +24,7 @@ javascript:
   Vue.component('tree-item', {
     template: '#item-template',
     props: {
-      nodeId: Object,
+      node: Object,
       graph: Object
     },
     data: function () {
@@ -46,15 +33,8 @@ javascript:
       }
     },
     computed: {
-      edges: function() {
-        this.graph.edges[this.nodeId]
-      },
-      node: function() {
-        this.graph.nodes[this.nodeId]
-      },
       isFolder: function () {
-        return true
-        return this.graph.edges[this.nodeId].length
+        return this.node.depends.length
       }
     },
     methods: {
@@ -63,13 +43,6 @@ javascript:
           this.isOpen = !this.isOpen
         }
       },
-    }
-  })
-  var demo = new Vue({
-    el: '#demo',
-    data: {
-      nodeId: 'root',
-      graph: graph
     }
   })
   Vue.component('log-item', {
@@ -81,10 +54,12 @@ javascript:
     data: {
       name: #{{@build_result.name.to_json}},
       dir: #{{@build_result.dir.to_json}},
-      url: "#{url('/build/' +  @build_result.id)}",
+      url: "#{url('/build')}",
       exception: #{{(@build_result.exception ? @build_result.exception.message : nil ).to_json}},
       depends: #{{@build_result.depends.map{|r| { name: r.name, dir: r.dir, exception: r.exception, url: url('/build/' +  r.id) }}.to_json}},
-      logs: #{{@sse_logger.logs.to_json}}
+      logs: #{{@sse_logger.logs.to_json}},
+      node: graph['root'],
+      graph: graph
     },
     methods: {
       scrollBottom: function() {
@@ -101,9 +76,10 @@ javascript:
       }
       new EventSource("#{url('/status')}").onmessage = function(e) {
         if ( e.data == "finished" ) {
-          fetch(self.url + "/depends").then((response) => {
+          fetch(self.url).then((response) => {
             return response.json().then((json) => {
-              self.depends = json
+              self.graph = json
+              self.node = json['root']
             })
           })
         }

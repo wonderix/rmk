@@ -9,19 +9,6 @@ require 'ostruct'
 
 # rubocop:disable Documentation
 
-class Graph
-  attr_reader :nodes, :edges
-  def initialize()
-    @nodes = {}
-    @edges = {}
-  end
-  def to_json
-    obj = {}
-    obj['nodes'] = @nodes
-    obj['edges'] = @edges
-    JSON.dump(obj)
-  end
-end
 
 module Rmk
   class BuildResult
@@ -53,13 +40,11 @@ module Rmk
     end
 
     def graph(gr)
-      return if gr.nodes[id]
+      return if gr[id]
 
-      gr.nodes[id] = { name: name, dir: dir, exception: exception }
-      gr.edges[id] = depends.map(&:id)
+      gr[id] = { name: name, dir: dir, exception: exception, depends: depends.map(&:id) }
       depends.each { |d| d.graph(gr) }
     end
-  
   end
 
 
@@ -109,10 +94,9 @@ module Rmk
     end
 
     def graph(gr)
-      return if gr.nodes[id]
+      return if gr[id]
 
-      gr.nodes[id] = { name: name, dir: dir, exception: exception }
-      gr.edges[id] = depends.map(&:id)
+      gr[id] = { name: name, dir: dir, exception: exception, depends: depends.map(&:id) }
       depends.each { |d| d.graph(gr) }
     end
   end
@@ -225,10 +209,8 @@ module Rmk
     end
 
     get '/build', provides: 'application/json' do
-      build_result = @root_build_results.build_results['root']
-      halt 404 unless build_result
-      gr = Graph.new
-      build_result.graph(gr)
+      gr = {}
+      @root_build_results.graph(gr)
       gr.to_json
     end
 
@@ -236,8 +218,8 @@ module Rmk
       @build_result = @root_build_results.build_results[params['id']]
       @logs = @sse_logger.logs
       halt 404 unless @build_result
-      @graph = Graph.new
-      @build_result.graph(@graph)
+      @graph = {}
+      @root_build_results.graph(@graph)
       slim :build
     end
 
