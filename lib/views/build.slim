@@ -7,6 +7,7 @@ template#item-template
     ul.browser-default(v-if="isFolder" v-show="isOpen")
       tree-item(class="item" v-for="(child, index) in node.depends" :key="index" :node="graph[child]" :graph="graph" )
 div
+  h4= @counter
   #build
     ul
       tree-item(class="item" :graph="graph" :node="graph['root']")

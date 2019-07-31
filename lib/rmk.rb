@@ -209,7 +209,7 @@ module Rmk
       @threads || 100
     end
 
-    attr_reader :name, :plan, :depends, :block, :file
+    attr_reader :name, :plan, :depends, :block, :file, :modified
     attr_accessor :exception
     def initialize(name, plan, depends, &block)
       depends = [depends] unless depends.is_a?(Array)
@@ -219,6 +219,7 @@ module Rmk
       @block = block
       @result = nil
       @exception = nil
+      @modified = false
       md5 = Digest::MD5.new
       md5.update(plan.md5)
       recursive_explicit_dependencies.each { |s| md5.update(s.to_s); }
@@ -302,6 +303,7 @@ module Rmk
         @exception = e
         raise e
       end
+      @modified = true
       @result = Future.new(@name) do
         recursive_implicit_dependencies
         depends.select { |d| d.is_a?(Rmk::Job) }.each(&:result)
@@ -351,6 +353,7 @@ module Rmk
     end
 
     def reset
+      @modified = false
       @result = nil
       @last_result = nil
       @depends.each do |d|
@@ -667,7 +670,6 @@ module Rmk
           begin
             item = policy.build(jobs)
             Rmk.stdout.write Rmk::Job.results(item).inspect if Rmk.verbose > 0 # rubocop:disable Metrics/LineLength, Style/NumericPredicate
-            Rmk.stdout.write "Build OK\n"
           rescue BuildError => e
             Rmk.stderr.write(e.message + "\n")
             Rmk.stderr.write(e.backtrace.join("\n")) if Rmk.verbose > 0 # rubocop:disable Metrics/LineLength, Style/NumericPredicate

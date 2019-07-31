@@ -167,6 +167,7 @@ module Rmk
 
     def initialize(controller, build_interval)
       super()
+      @counter = 0 
       @controller = controller
       @sse_logger = SseLogger.new
       Rmk.stdout = @sse_logger.writer(:out)
@@ -182,6 +183,7 @@ module Rmk
     def build(policy: nil, interval: @build_interval, jobs: nil)
       @status.value = :building
       @controller.run(policy: policy, jobs: jobs) do |result_jobs|
+        @counter += 1 if result_jobs.reduce(false) { |acc ,j| acc ||= j.modified || j.exception }
         @root_build_results = RootBuildResult.new(@controller, result_jobs)
         @status.value = :finished
         if interval
