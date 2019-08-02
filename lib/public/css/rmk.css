@@ -64,4 +64,17 @@
 .bold {
   font-weight: bold;
 }
-  
+
+.build-ok {
+    background-color: green;
+    color: white;
+    padding: 5px;
+    border: 0.1px solid black
+}
+
+.build-error {
+    background-color: red;
+    color: white;
+    padding: 5px;
+    border: 0.1px solid black
+}

@@ -8,6 +8,13 @@ template#item-template
       tree-item(class="item" v-for="(child, index) in node.depends" :key="index" :node="graph[child]" :graph="graph" )
 div
   #build
+    div(v-bind:class="{ 'build-ok': info.succeeded, 'build-error': !info.succeeded}" )
+      .right
+         div() started {{ info.started_at }}
+         div() finished {{ info.finished_at }}
+      h5() {{ node.name }}
+    .history
+      a(v-bind:href="'#{url('/build/')}' + info.id" v-for="(info, index) in history" v-bind:class="{ 'build-ok': info.succeeded, 'build-error': !info.succeeded}" ) {{ info.id }}
     ul
       tree-item(class="item" :graph="graph" :node="graph['root']")
     div.terminal(v-if="node.exception" v-cloak="")
@@ -54,6 +61,8 @@ javascript:
     data: {
       url: "#{url('/build/' + @build.id)}",
       logs: #{{@build.logs.to_json}},
+      info: #{{@build.info.to_json}},
+      history: #{{@build_history.list.map(&:info).to_json}},
       node: graph['root'],
       graph: graph
     },
@@ -83,13 +92,18 @@ javascript:
       }
       new EventSource("#{url('/status')}").onmessage = function(e) {
         if ( e.data == "finished" ) {
-          fetch(self.url).then((response) => {
+          fetch(self.url, { headers: {'Accept': 'application/json'}}).then((response) => {
             return response.json().then((json) => {
               self.graph = json
               self.node = json['root']
             })
           })
-        }
+          fetch(self.url + '/../../history', { headers: {'Accept': 'application/json'}}).then((response) => {
+            return response.json().then((json) => {
+              self.history = json
+            })
+          })
+       }
       }
     },
     updated: function () {

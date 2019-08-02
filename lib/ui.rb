@@ -76,10 +76,16 @@ module Rmk
 
   class BuildHistoryEntry
 
+    attr_accessor :succeeded
     def initialize(dir)
       @dir = dir
       @connections = []
+      @succeeded = true
       FileUtils.mkdir_p(@dir)
+    end
+
+    def start
+      @started_at = Time.now
     end
 
     def id
@@ -87,19 +93,29 @@ module Rmk
     end
 
     def graph=(graph)
-      File.write(File.join(@dir,"graph.json"),graph.to_json)
+      @graph = graph
     end
 
     def graph
-      JSON.parse(File.read(File.join(@dir,"graph.json")))
+      @graph || JSON.parse(File.read(File.join(@dir,"graph.json")))
     rescue Errno::ENOENT
-      {}
+      {'root' => { 'name' => '???' , 'depends' => [] }}
     end
 
     def logs
       File.readlines(File.join(@dir,"logs.json")).map{ |line| JSON.parse(line)}
     rescue Errno::ENOENT
       []
+    end
+
+    def info
+      result = begin 
+        JSON.parse(File.read(File.join(@dir,"info.json")))
+      rescue Errno::ENOENT
+        {'started_at' => @started_at, 'succeeded' => @succeeded}
+      end
+      result['id'] = self.id
+      result
     end
 
     def log(log)
@@ -113,8 +129,12 @@ module Rmk
     def commit(target)
       @logs.close
       @logs = nil
+      g = graph
+      File.write(File.join(@dir,"graph.json"),@graph.to_json)
+      File.write(File.join(@dir,"info.json"),{started_at: @started_at, finished_at: Time.now, succeeded: @succeeded}.to_json)
       FileUtils.mv(@dir, target, :verbose => false, :force => true)
       FileUtils.mkdir_p(@dir)
+      graph = g
     end
 
     def subscribe(out)
@@ -127,7 +147,7 @@ module Rmk
   class BuildHistory
     def initialize(dir)
       @dir = dir
-      @builds = Dir.glob(File.join(dir,"*")).select { |d| d =~ /^\d=$/}.map(&:to_i).sort {|x,y| y <=> x}
+      @builds = Dir.glob(File.join(dir,"*")).map {|f| File.basename(f)}.select { |d| d =~ /^\d+$/}.map(&:to_i).sort {|x,y| y <=> x}
       @counter = @builds.first.to_i
       @current = BuildHistoryEntry.new(File.join(@dir,'current'))
     end
@@ -137,7 +157,7 @@ module Rmk
     end
 
     def list
-      @builds
+      [ @current ] + @builds.map {|b| BuildHistoryEntry.new(File.join(@dir,b.to_s))}
     end
 
     def get(id)
@@ -148,7 +168,7 @@ module Rmk
 
     def commit
       @counter += 1
-      @builds << @counter
+      @builds.unshift @counter
       @current.commit(File.join(@dir,@counter.to_s)) if @current
     end
   end
@@ -172,12 +192,13 @@ module Rmk
 
     def build(policy: nil, interval: @build_interval, jobs: nil)
       @status.value = :building
+      @build_history.current.start
       @controller.run(policy: policy, jobs: jobs) do |result_jobs|
         graph = BuildGraph.scan_root(@controller, result_jobs)
         @build_history.current.graph = graph
+        @build_history.current.succeeded = graph['root'][:exception].nil?
         if result_jobs.reduce(false) { |acc ,j| acc ||= j.modified || j.exception }
           @build_history.commit
-          @build_history.current.graph = graph
         end
         @status.value = :finished
         if interval
@@ -204,10 +225,14 @@ module Rmk
       redirect to('/build/current')
     end
 
-    get '/build/:id' do
+    get '/build/:id', provides: 'text/html' do
       @build = @build_history.get(params['id'])
       halt 404 unless @build
       slim :build
+    end
+
+    get '/history', provides: 'application/json' do
+      @build_history.list.map(&:info).to_json
     end
 
     get '/build/:id', provides: 'application/json' do
