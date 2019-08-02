@@ -17,10 +17,23 @@ class PlanMock
 end
 
 PLAN = PlanMock.new
-describe Rmk::Job, '#relative_path_from' do
+describe Rmk::Job do
   around(:each) do |example|
     example.run
     FileUtils.rm_rf(PLAN.build_dir)
+  end
+
+  it 'handle exceptions correct' do
+    plan = PlanMock.new
+
+    job = Rmk::Job.new('job1', PLAN, []) do
+      raise StandardError, 'test'
+    end
+
+    # start build
+    job.build(Rmk::ModificationTimeBuildPolicy.new)
+    expect(job.exception).not_to be_nil
+    expect { job.result }.to raise_error(StandardError)
   end
 
   it 'propagate exceptions' do
