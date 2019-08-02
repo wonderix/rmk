@@ -9,14 +9,14 @@ require 'ostruct'
 
 # rubocop:disable Documentation
 
-
 module Rmk
   class BuildGraph
-    def self.scan(job,graph)
+    def self.scan(job, graph)
       return unless job.is_a?(Rmk::Job)
       return graph if graph[job.id]
-      graph[job.id] = { name: job.name, dir: job.plan.dir, exception: job.exception, depends: job.depends.select{|j| j.is_a?(Rmk::Job)}.map(&:id) }
-      job.depends.each { |d| BuildGraph.scan(d,graph) }
+
+      graph[job.id] = { name: job.name, dir: job.plan.dir, exception: job.exception, depends: job.depends.select { |j| j.is_a?(Rmk::Job) }.map(&:id) }
+      job.depends.each { |d| BuildGraph.scan(d, graph) }
     end
 
     def self.scan_root(controller, jobs)
@@ -24,7 +24,7 @@ module Rmk
       exception = jobs_with_exception.empty? ? nil : jobs_with_exception.first.exception
       graph = {}
       graph['root'] = { name: controller.task, dir: controller.dir, exception: exception, depends: jobs.map(&:id) }
-      jobs.each { |j| BuildGraph.scan(j,graph) }
+      jobs.each { |j| BuildGraph.scan(j, graph) }
       graph
     end
   end
@@ -48,10 +48,9 @@ module Rmk
       end
     end
 
-    def writer(channel,build_history)
+    def writer(channel, build_history)
       Writer.new(channel, build_history)
     end
-
   end
 
   class Subscribable
@@ -76,7 +75,6 @@ module Rmk
   end
 
   class BuildHistoryEntry
-
     attr_accessor :succeeded
     def initialize(dir)
       @dir = dir
@@ -99,29 +97,29 @@ module Rmk
     end
 
     def graph
-      @graph || JSON.parse(File.read(File.join(@dir,"graph.json")))
+      @graph || JSON.parse(File.read(File.join(@dir, 'graph.json')))
     rescue Errno::ENOENT
-      {'root' => { 'name' => '???' , 'depends' => [] }}
+      { 'root' => { 'name' => '???', 'depends' => [] } }
     end
 
     def logs
-      File.readlines(File.join(@dir,"logs.json")).map{ |line| JSON.parse(line)}
+      File.readlines(File.join(@dir, 'logs.json')).map { |line| JSON.parse(line) }
     rescue Errno::ENOENT
       []
     end
 
     def info
-      result = begin 
-        JSON.parse(File.read(File.join(@dir,"info.json")))
-      rescue Errno::ENOENT
-        {'started_at' => @started_at, 'succeeded' => @succeeded}
+      result = begin
+        JSON.parse(File.read(File.join(@dir, 'info.json')))
+               rescue Errno::ENOENT
+                 { 'started_at' => @started_at, 'succeeded' => @succeeded }
       end
-      result['id'] = self.id
+      result['id'] = id
       result
     end
 
     def log(log)
-      @logs = File.open(File.join(@dir,"logs.json"),"a") unless @logs
+      @logs ||= File.open(File.join(@dir, 'logs.json'), 'a')
       @connections.each do |c|
         c << "data: #{log.to_json}\n\n" unless c.closed?
       end
@@ -132,9 +130,9 @@ module Rmk
       @logs.close
       @logs = nil
       g = graph
-      File.write(File.join(@dir,"graph.json"),g.to_json)
-      File.write(File.join(@dir,"info.json"),{started_at: @started_at, finished_at: Time.now, succeeded: @succeeded}.to_json)
-      FileUtils.mv(@dir, target, :verbose => false, :force => true)
+      File.write(File.join(@dir, 'graph.json'), g.to_json)
+      File.write(File.join(@dir, 'info.json'), { started_at: @started_at, finished_at: Time.now, succeeded: @succeeded }.to_json)
+      FileUtils.mv(@dir, target, verbose: false, force: true)
       FileUtils.mkdir_p(@dir)
       graph = g
     end
@@ -145,33 +143,31 @@ module Rmk
     end
   end
 
-
   class BuildHistory
     def initialize(dir)
       @dir = dir
-      @builds = Dir.glob(File.join(dir,"*")).map {|f| File.basename(f)}.select { |d| d =~ /^\d+$/}.map(&:to_i).sort {|x,y| y <=> x}
+      @builds = Dir.glob(File.join(dir, '*')).map { |f| File.basename(f) }.select { |d| d =~ /^\d+$/ }.map(&:to_i).sort { |x, y| y <=> x }
       @counter = @builds.first.to_i
-      @current = BuildHistoryEntry.new(File.join(@dir,'current'))
+      @current = BuildHistoryEntry.new(File.join(@dir, 'current'))
     end
 
-    def current
-      @current
-    end
+    attr_reader :current
 
     def list
-      [ @current ] + @builds.map {|b| BuildHistoryEntry.new(File.join(@dir,b.to_s))}
+      [@current] + @builds.map { |b| BuildHistoryEntry.new(File.join(@dir, b.to_s)) }
     end
 
     def get(id)
       return @current if id == 'current'
-      dir = File.join(@dir,id)
-      File.directory?(dir) ? BuildHistoryEntry.new(File.join(@dir,id)) : nil
+
+      dir = File.join(@dir, id)
+      File.directory?(dir) ? BuildHistoryEntry.new(File.join(@dir, id)) : nil
     end
 
     def commit
       @counter += 1
       @builds.unshift @counter
-      @current.commit(File.join(@dir,@counter.to_s)) if @current
+      @current&.commit(File.join(@dir, @counter.to_s))
     end
   end
 
@@ -180,11 +176,11 @@ module Rmk
 
     def initialize(controller, build_interval)
       super()
-      @build_history = BuildHistory.new(File.join(controller.dir,".rmk/history")) 
+      @build_history = BuildHistory.new(File.join(controller.dir, '.rmk/history'))
       @controller = controller
       @sse_logger = SseLogger.new
-      Rmk.stdout = @sse_logger.writer(:out,@build_history)
-      Rmk.stderr = @sse_logger.writer(:error,@build_history)
+      Rmk.stdout = @sse_logger.writer(:out, @build_history)
+      Rmk.stderr = @sse_logger.writer(:error, @build_history)
       @status = Subscribable.new(:idle)
       @running = Subscribable.new(true)
       @queue = EventMachine::Queue.new
@@ -198,7 +194,7 @@ module Rmk
       @controller.run(policy: policy, jobs: jobs) do |result_jobs|
         graph = BuildGraph.scan_root(@controller, result_jobs)
         @build_history.current.graph = graph
-        if result_jobs.reduce(false) { |acc ,j| acc ||= j.modified? }
+        if result_jobs.reduce(false) { |acc, j| acc ||= j.modified? }
           @build_history.commit
         end
         @status.value = :finished

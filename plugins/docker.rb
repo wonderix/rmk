@@ -47,7 +47,7 @@ class DockerfileParser
     case cmd
     when 'FROM' then params.join('').split(':')
     when 'RUN' then params.join(' ').split(/\s(\&|\;)+\s/).map(&:strip)
-    when 'ENV' then
+    when 'ENV'
       { name: params[0], value: params[1..-1].join(' ') }
     when 'COPY', 'ADD' then { src: params[0], dst: params[1] }
     else

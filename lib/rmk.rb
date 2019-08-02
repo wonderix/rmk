@@ -12,6 +12,7 @@ require 'stringio'
 require 'uri'
 require 'open3'
 require 'yaml'
+require 'fileutils'
 
 # rubocop:disable Documentation
 
@@ -86,6 +87,7 @@ module Rmk
     def result
       Fiber.yield while @result.nil?
       raise @result if @result.is_a?(Exception)
+
       @result
     end
   end
@@ -232,7 +234,7 @@ module Rmk
       md5.hexdigest
     end
 
-    def modified? 
+    def modified?
       @modified
     end
 
@@ -299,6 +301,7 @@ module Rmk
     def result
       r = ensure_result
       raise r if r.is_a?(Exception)
+
       r
     end
 
@@ -385,7 +388,7 @@ module Rmk
         @dir = File.dirname(value)
       end
     end
-  
+
     attr_accessor :md5
     def initialize(build_file_cache, file, md5, depends)
       @build_file_cache = build_file_cache
@@ -418,7 +421,7 @@ module Rmk
     end
 
     def job(name, *depends, &block)
-      Job.new(name, self, depends + @depends , &block)
+      Job.new(name, self, depends + @depends, &block)
     end
 
     def glob(pattern)
@@ -442,10 +445,9 @@ module Rmk
     end
   end
 
-
   class GitRepo
     include Tools
-    def initialize(remote,local,branch)
+    def initialize(remote, local, branch)
       @remote = remote
       @local = local
       @branch = branch
@@ -454,7 +456,7 @@ module Rmk
 
     def mtime
       pull
-      return File.mtime(@local + '.yaml') 
+      File.mtime(@local + '.yaml')
     end
 
     def to_s
@@ -462,7 +464,8 @@ module Rmk
     end
 
     def pull
-      return @local unless Time.now() >  @next_pull
+      return @local unless Time.now > @next_pull
+
       info_file = @local + '.yaml'
       info = {}
       if File.directory?(@local)
@@ -486,7 +489,7 @@ module Rmk
         info['branch'] = @branch
         File.write(info_file, YAML.dump(info))
       end
-      @next_pull = Time.now() + 60
+      @next_pull = Time.now + 60
       @local
     end
   end
@@ -515,15 +518,15 @@ module Rmk
       file = File.expand_path(File.join(dir, file))
       file = File.join(file, 'build.rmk') if File.directory?(file)
       depends << file
-      @cache[file] ||= load_inner(file,depends)
+      @cache[file] ||= load_inner(file, depends)
     end
 
-    def load_inner(file,depends)
+    def load_inner(file, depends)
       plan_class = Class.new(Plan)
       content = File.read(file)
       plan_class.file = file
       plan_class.module_eval(content, file, 1)
-      MethodCache.new(plan_class.new(self, file, Digest::MD5.hexdigest(content),depends ))
+      MethodCache.new(plan_class.new(self, file, Digest::MD5.hexdigest(content), depends))
     end
   end
 
