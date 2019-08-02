@@ -2,5 +2,5 @@
 #include "log.h"
 
 void log(const char* message) {
-  puts(message);
+  puts(message)
 }

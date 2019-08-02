@@ -11,102 +11,28 @@ require 'ostruct'
 
 
 module Rmk
-  class BuildResult
-    attr_accessor :depends
-
-    def initialize(job)
-      @job = job
-      @depends = []
+  class BuildGraph
+    def self.scan(job,graph)
+      return unless job.is_a?(Rmk::Job)
+      return graph if graph[job.id]
+      graph[job.id] = { name: job.name, dir: job.plan.dir, exception: job.exception, depends: job.depends.select{|j| j.is_a?(Rmk::Job)}.map(&:id) }
+      job.depends.each { |d| BuildGraph.scan(d,graph) }
     end
 
-    def jobs
-      [@job]
-    end
-
-    def name
-      @job.name
-    end
-
-    def dir
-      @job.plan.dir
-    end
-
-    def id
-      @job.id
-    end
-
-    def exception
-      @job.exception
-    end
-
-    def graph(gr)
-      return if gr[id]
-
-      gr[id] = { name: name, dir: dir, exception: exception, depends: depends.map(&:id) }
-      depends.each { |d| d.graph(gr) }
-    end
-  end
-
-
-
-  class RootBuildResult
-    attr_accessor :depends
-    attr_reader :build_results
-
-    def initialize(controller, jobs)
-      @controller = controller
-      @build_results = {}
-      @build_results['root'] = self
-      @depends = scan(jobs)
-    end
-
-    def jobs
-      nil
-    end
-
-    def name
-      @controller.task
-    end
-
-    def dir
-      @controller.dir
-    end
-
-    def id
-      'root'
-    end
-
-    def exception
-      list = @depends.reject { |i| i.exception.nil? }
-      list.empty? ? nil : list.first.exception
-    end
-
-    def scan(jobs)
-      result = []
-      jobs.each do |job|
-        next unless job.is_a?(Rmk::Job)
-
-        build_result = @build_results[job.id] ||= BuildResult.new(job)
-        build_result.depends = scan(job.depends)
-        result << build_result
-      end
-      result
-    end
-
-    def graph(gr)
-      return if gr[id]
-
-      gr[id] = { name: name, dir: dir, exception: exception, depends: depends.map(&:id) }
-      depends.each { |d| d.graph(gr) }
+    def self.scan_root(controller, jobs)
+      list = jobs.reject { |i| i.exception.nil? }
+      graph = {}
+      graph['root'] = { name: controller.task, dir: controller.dir, exception: list.empty? ? nil : list.first.exception, depends: jobs.map(&:id) }
+      jobs.each { |j| BuildGraph.scan(j,graph) }
+      graph
     end
   end
 
   class SseLogger
     class Writer
-      def initialize(channel, connections, logs)
+      def initialize(channel, build_history)
         @channel = channel
-        @connections = connections
-        @logs = logs
+        @build_history = build_history
       end
 
       def write(data)
@@ -116,29 +42,15 @@ module Rmk
 
           log = { channel: @channel, message: message,
                   time: Time.now.strftime('%H:%M:%S') }
-          @logs.shift if @logs.size > 1000
-          @logs << log
-          @connections.each do |c|
-            c << "data: #{log.to_json}\n\n" unless c.closed?
-          end
+          @build_history.current.log(log)
         end
       end
     end
 
-    attr_reader :logs
-    def initialize
-      @connections = []
-      @logs = []
+    def writer(channel,build_history)
+      Writer.new(channel, build_history)
     end
 
-    def writer(channel)
-      Writer.new(channel, @connections, @logs)
-    end
-
-    def subscribe(out)
-      @connections << out
-      @connections.reject!(&:closed?)
-    end
   end
 
   class Subscribable
@@ -162,19 +74,97 @@ module Rmk
     end
   end
 
+  class BuildHistoryEntry
+
+    def initialize(dir)
+      @dir = dir
+      @connections = []
+      FileUtils.mkdir_p(@dir)
+    end
+
+    def id
+      File.basename(@dir)
+    end
+
+    def graph=(graph)
+      File.write(File.join(@dir,"graph.json"),graph.to_json)
+    end
+
+    def graph
+      JSON.parse(File.read(File.join(@dir,"graph.json")))
+    rescue Errno::ENOENT
+      {}
+    end
+
+    def logs
+      File.readlines(File.join(@dir,"logs.json")).map{ |line| JSON.parse(line)}
+    rescue Errno::ENOENT
+      []
+    end
+
+    def log(log)
+      @logs = File.open(File.join(@dir,"logs.json"),"a") unless @logs
+      @connections.each do |c|
+        c << "data: #{log.to_json}\n\n" unless c.closed?
+      end
+      @logs.puts(log.to_json)
+    end
+
+    def commit(target)
+      @logs.close
+      @logs = nil
+      FileUtils.mv(@dir, target, :verbose => false, :force => true)
+      FileUtils.mkdir_p(@dir)
+    end
+
+    def subscribe(out)
+      @connections << out
+      @connections.reject!(&:closed?)
+    end
+  end
+
+
+  class BuildHistory
+    def initialize(dir)
+      @dir = dir
+      @builds = Dir.glob(File.join(dir,"*")).select { |d| d =~ /^\d=$/}.map(&:to_i).sort {|x,y| y <=> x}
+      @counter = @builds.first.to_i
+      @current = BuildHistoryEntry.new(File.join(@dir,'current'))
+    end
+
+    def current
+      @current
+    end
+
+    def list
+      @builds
+    end
+
+    def get(id)
+      return @current if id == 'current'
+      dir = File.join(@dir,id)
+      File.directory?(dir) ? BuildHistoryEntry.new(File.join(@dir,id)) : nil
+    end
+
+    def commit
+      @counter += 1
+      @builds << @counter
+      @current.commit(File.join(@dir,@counter.to_s)) if @current
+    end
+  end
+
   class App < Sinatra::Base
     helpers Sinatra::Streaming
 
     def initialize(controller, build_interval)
       super()
-      @counter = 0 
+      @build_history = BuildHistory.new(File.join(controller.dir,".rmk/history")) 
       @controller = controller
       @sse_logger = SseLogger.new
-      Rmk.stdout = @sse_logger.writer(:out)
-      Rmk.stderr = @sse_logger.writer(:error)
+      Rmk.stdout = @sse_logger.writer(:out,@build_history)
+      Rmk.stderr = @sse_logger.writer(:error,@build_history)
       @status = Subscribable.new(:idle)
       @running = Subscribable.new(true)
-      @root_build_results = RootBuildResult.new(@controller, [])
       @queue = EventMachine::Queue.new
       @build_interval = build_interval
       enqueue_build
@@ -183,8 +173,12 @@ module Rmk
     def build(policy: nil, interval: @build_interval, jobs: nil)
       @status.value = :building
       @controller.run(policy: policy, jobs: jobs) do |result_jobs|
-        @counter += 1 if result_jobs.reduce(false) { |acc ,j| acc ||= j.modified || j.exception }
-        @root_build_results = RootBuildResult.new(@controller, result_jobs)
+        graph = BuildGraph.scan_root(@controller, result_jobs)
+        @build_history.current.graph = graph
+        if result_jobs.reduce(false) { |acc ,j| acc ||= j.modified || j.exception }
+          @build_history.commit
+          @build_history.current.graph = graph
+        end
         @status.value = :finished
         if interval
           EventMachine.add_timer(interval) do
@@ -207,34 +201,23 @@ module Rmk
     end
 
     get '/' do
-      redirect to('/build/root')
-    end
-
-    get '/build', provides: 'application/json' do
-      gr = {}
-      @root_build_results.graph(gr)
-      gr.to_json
+      redirect to('/build/current')
     end
 
     get '/build/:id' do
-      @build_result = @root_build_results.build_results[params['id']]
-      @logs = @sse_logger.logs
-      halt 404 unless @build_result
-      @graph = {}
-      @root_build_results.graph(@graph)
+      @build = @build_history.get(params['id'])
+      halt 404 unless @build
       slim :build
     end
 
-    get '/build/:id/depends' do
-      @build_result = @root_build_results.build_results[params['id']]
-      @logs = @sse_logger.logs
-      halt 404 unless @build_result
-      @build_result.depends.map { |r| { name: r.name, dir: r.dir, exception: r.exception, url: url('/build/' + r.id) } }.to_json
+    get '/build/:id', provides: 'application/json' do
+      build = @build_history.get(params['id'])
+      halt 404 unless build
+      build.graph.to_json
     end
 
     get '/rebuild/:id' do
-      @build_result = @root_build_results.build_results[params['id']]
-      halt 404 unless @build_result
+      halt 404 unless @build_history.get(params['id'])
       enqueue_build(policy: LocalBuildPolicy.new, jobs: @build_result.jobs, interval: nil)
       redirect to("/build/#{params['id']}")
     end
@@ -263,9 +246,11 @@ module Rmk
       Tools.killall
     end
 
-    get '/log/stream', provides: 'text/event-stream' do
+    get '/build/:id/log/stream', provides: 'text/event-stream' do
+      build = @build_history.get(params['id'])
+      halt 404 unless build
       stream(:keep_open) do |out|
-        @sse_logger.subscribe(out)
+        build.subscribe(out)
       end
     end
 
