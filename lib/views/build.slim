@@ -13,7 +13,7 @@ div
          div() started {{ info.started_at }}
          div() finished {{ info.finished_at }}
       h5() {{ node.name }}
-    .history
+    .history(style="overflow-x: scroll; width:100%; height:40px;")
       a(v-bind:href="'#{url('/build/')}' + info.id" v-for="(info, index) in history" v-bind:class="{ 'build-ok': info.succeeded, 'build-error': !info.succeeded}" ) {{ info.id }}
     ul
       tree-item(class="item" :graph="graph" :node="graph['root']")
