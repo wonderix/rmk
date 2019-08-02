@@ -20,9 +20,10 @@ module Rmk
     end
 
     def self.scan_root(controller, jobs)
-      list = jobs.reject { |i| i.exception.nil? }
+      jobs_with_exception = jobs.reject { |i| i.exception.nil? }
+      exception = jobs_with_exception.empty? ? nil : jobs_with_exception.first.exception
       graph = {}
-      graph['root'] = { name: controller.task, dir: controller.dir, exception: list.empty? ? nil : list.first.exception, depends: jobs.map(&:id) }
+      graph['root'] = { name: controller.task, dir: controller.dir, exception: exception, depends: jobs.map(&:id) }
       jobs.each { |j| BuildGraph.scan(j,graph) }
       graph
     end
@@ -94,6 +95,7 @@ module Rmk
 
     def graph=(graph)
       @graph = graph
+      @succeeded = graph['root'][:exception].nil?
     end
 
     def graph
@@ -130,7 +132,7 @@ module Rmk
       @logs.close
       @logs = nil
       g = graph
-      File.write(File.join(@dir,"graph.json"),@graph.to_json)
+      File.write(File.join(@dir,"graph.json"),g.to_json)
       File.write(File.join(@dir,"info.json"),{started_at: @started_at, finished_at: Time.now, succeeded: @succeeded}.to_json)
       FileUtils.mv(@dir, target, :verbose => false, :force => true)
       FileUtils.mkdir_p(@dir)
@@ -196,8 +198,7 @@ module Rmk
       @controller.run(policy: policy, jobs: jobs) do |result_jobs|
         graph = BuildGraph.scan_root(@controller, result_jobs)
         @build_history.current.graph = graph
-        @build_history.current.succeeded = graph['root'][:exception].nil?
-        if result_jobs.reduce(false) { |acc ,j| acc ||= j.modified || j.exception }
+        if result_jobs.reduce(false) { |acc ,j| acc ||= j.modified? }
           @build_history.commit
         end
         @status.value = :finished

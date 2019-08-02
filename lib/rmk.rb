@@ -86,7 +86,6 @@ module Rmk
     def result
       Fiber.yield while @result.nil?
       raise @result if @result.is_a?(Exception)
-
       @result
     end
   end
@@ -210,8 +209,7 @@ module Rmk
       @threads || 100
     end
 
-    attr_reader :name, :plan, :depends, :block, :file, :modified
-    attr_accessor :exception
+    attr_reader :name, :plan, :depends, :block, :file
     def initialize(name, plan, depends, &block)
       depends = [depends] unless depends.is_a?(Array)
       @name = name
@@ -219,7 +217,6 @@ module Rmk
       @depends = depends.flatten
       @block = block
       @result = nil
-      @exception = nil
       @modified = false
       md5 = Digest::MD5.new
       md5.update(plan.md5)
@@ -233,6 +230,10 @@ module Rmk
       md5.update(@plan.dir)
       md5.update(@name)
       md5.hexdigest
+    end
+
+    def modified? 
+      @modified
     end
 
     def last_result
@@ -277,44 +278,58 @@ module Rmk
       save(@result)
     end
 
-    def save(result)
+    def save(result_or_exception)
       FileUtils.mkdir_p(File.dirname(@file))
-      File.open(@file, 'wb') { |f| Marshal.dump(result, f) }
+      File.open(@file, 'wb') { |f| Marshal.dump(result_or_exception, f) }
       File.open(@file + '.dep', 'wb') { |f| Marshal.dump(@recursive_implicit_dependencies, f) } if @recursive_implicit_dependencies && !@recursive_implicit_dependencies.empty?
-      result
+      result_or_exception
     end
 
-    def result
+    def ensure_result
       if @result.is_a?(Future)
         begin
           @result = @result.result
-          @exception = nil
         rescue StandardError => e
-          @exception = e
-          raise e
+          @result = e
         end
       end
       @result
     end
 
+    def result
+      r = ensure_result
+      raise r if r.is_a?(Exception)
+      r
+    end
+
+    def exception
+      r = ensure_result || last_result
+      return r if r.is_a?(Exception)
+
+      nil
+    end
+
     def build(policy)
+      @modified = true
       begin
         policy.build(depends)
       rescue StandardError => e
-        @exception = e
-        raise e
+        raise save(e)
       end
-      @modified = true
       @result = Future.new(@name) do
-        recursive_implicit_dependencies
-        depends.select { |d| d.is_a?(Rmk::Job) }.each(&:result)
-        bdg = @block.binding
-        bdg.local_variables.each do |l|
-          value = bdg.local_variable_get(l)
-          bdg.local_variable_set(l, value.result) if value.is_a?(Rmk::Job)
-          bdg.local_variable_set(l, value.map { |v| v.is_a?(Rmk::Job) ? v.result : v }) if value.is_a?(Array)
+        begin
+          recursive_implicit_dependencies
+          depends.select { |d| d.is_a?(Rmk::Job) }.each(&:result)
+          bdg = @block.binding
+          bdg.local_variables.each do |l|
+            value = bdg.local_variable_get(l)
+            bdg.local_variable_set(l, value.result) if value.is_a?(Rmk::Job)
+            bdg.local_variable_set(l, value.map { |v| v.is_a?(Rmk::Job) ? v.result : v }) if value.is_a?(Array)
+          end
+          save(@block.call(@recursive_implicit_dependencies))
+        rescue StandardError => e
+          raise save(e)
         end
-        save(@block.call(@recursive_implicit_dependencies))
       end
       return result if Job.threads == 1
 
@@ -355,8 +370,6 @@ module Rmk
 
     def reset
       @modified = false
-      @result = nil
-      @last_result = nil
       @depends.each do |d|
         d.reset if d.is_a?(Job)
       end
@@ -699,7 +712,8 @@ module Rmk
           jobs.each(&:reset)
           begin
             item = policy.build(jobs)
-            Rmk.stdout.write Rmk::Job.results(item).inspect if Rmk.verbose > 0 # rubocop:disable Metrics/LineLength, Style/NumericPredicate
+            results = Rmk::Job.results(item)
+            Rmk.stdout.write results.inspect if Rmk.verbose > 0 # rubocop:disable Metrics/LineLength, Style/NumericPredicate
           rescue BuildError => e
             Rmk.stderr.write(e.message + "\n")
             Rmk.stderr.write(e.backtrace.join("\n")) if Rmk.verbose > 0 # rubocop:disable Metrics/LineLength, Style/NumericPredicate
