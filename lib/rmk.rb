@@ -167,7 +167,8 @@ module Rmk
       out.write(message + "\n") if trace
       exception_buffer = StringIO.new
       opts = {}
-      opts[:chdir] = chdir || dir
+      chdir ||= dir
+      opts[:chdir] = chdir
       popen3_inner(cmd, **opts) do |stdin, stdout, stderr, wait_thr|
         connout = EventMachine.watch(stdout, Popen3Reader, out, Fiber.current)
         connerr = EventMachine.watch(stderr, Popen3Reader, Tee.new(err, exception_buffer), Fiber.current)
@@ -178,8 +179,8 @@ module Rmk
           connout.notify_readable = true
           connerr.notify_readable = true
           Fiber.yield until connout.closed? && connerr.closed?
-          raise BuildError.new("#{cmd_string}\nKilled", dir) unless Tools.pids.delete(wait_thr.pid)
-          raise BuildError.new("#{cmd_string}\n#{exception_buffer.string}", dir) unless wait_thr.value.exitstatus.zero?
+          raise BuildError.new("#{cmd_string}\nKilled", chdir) unless Tools.pids.delete(wait_thr.pid)
+          raise BuildError.new("#{cmd_string}\n#{exception_buffer.string}", chdir) unless wait_thr.value.exitstatus.zero?
         ensure
           Tools.pids.delete(wait_thr.pid)
           connout.detach
@@ -366,20 +367,23 @@ module Rmk
     BUILD_DIR = '.rmk'
     include Tools
 
+    class << self
+      def file=(value)
+        @dir = File.dirname(value)
+      end
+    end
+  
     attr_accessor :md5
-    def initialize(build_file_cache, file, md5)
+    def initialize(build_file_cache, file, md5, depends)
       @build_file_cache = build_file_cache
       @file = file
       @dir = File.dirname(file)
       @md5 = md5
-    end
-
-    def self.file=(value)
-      @dir = File.dirname(value)
+      @depends = depends
     end
 
     def project(file)
-      @build_file_cache.load(file, @dir)
+      @build_file_cache.load(file, @dir, @depends.clone)
     end
 
     def self.job_method(*symbols)
@@ -394,14 +398,14 @@ module Rmk
         prepend proxy
       end
     end
-    
+
     def self.plugin(name)
       Kernel.require File.join(File.expand_path(File.dirname(File.dirname(__FILE__))), 'plugins', name + '.rb')
       include const_get(name.split('-').map(&:capitalize).join)
     end
 
     def job(name, *depends, &block)
-      Job.new(name, self, depends, &block)
+      Job.new(name, self, depends + @depends , &block)
     end
 
     def glob(pattern)
@@ -425,62 +429,88 @@ module Rmk
     end
   end
 
-  class PlanCache
+
+  class GitRepo
     include Tools
+    def initialize(remote,local,branch)
+      @remote = remote
+      @local = local
+      @branch = branch
+      @next_pull = Time.at(0)
+    end
+
+    def mtime
+      pull
+      return File.mtime(@local + '.yaml') 
+    end
+
+    def to_s
+      "#{@remote}##{@branch}"
+    end
+
+    def pull
+      return @local unless Time.now() >  @next_pull
+      info_file = @local + '.yaml'
+      info = {}
+      if File.directory?(@local)
+        if File.readable?(info_file)
+          info = YAML.safe_load(File.read(info_file))
+          if info['branch'] != @branch
+            system("git checkout #{@branch}", chdir: @local)
+            info['branch'] = @branch
+            File.write(info_file, YAML.dump(info))
+          else
+            FileUtils.touch(info_file) unless capture2('git pull', chdir: @local) =~ /Already up to date/
+          end
+        else
+          system("git checkout #{@branch}", chdir: @local)
+          info['branch'] = @branch
+          File.write(info_file, YAML.dump(info))
+        end
+      else
+        FileUtils.mkdir_p(File.dirname(@local))
+        system("git clone --branch #{@branch} #{@remote} #{@local}", chdir: File.dirname(@local))
+        info['branch'] = @branch
+        File.write(info_file, YAML.dump(info))
+      end
+      @next_pull = Time.now() + 60
+      @local
+    end
+  end
+
+  class PlanCache
     def initialize
       @cache = {}
     end
 
-    def load(file, dir = '.')
+    def load(file, dir = '.', depends = [])
       case dir
       when %r{git@([^:]*):(.*)/([^#]*)(#.*|)}
         fragment = Regexp.last_match(4)
         path = Regexp.last_match(3).sub(/\.git$/, '')
-        dir = git_pull(dir, File.join(RMK_DIR, path), fragment.empty? ? 'master' : fragment[1..-1])
+        repo = GitRepo.new(dir, File.join(RMK_DIR, path), fragment.empty? ? 'master' : fragment[1..-1])
+        dir = repo.pull
+        depends << repo
       when %r{https{0,1}://}
         uri = URI.parse(dir)
         branch = uri.fragment || 'master'
         uri.fragment = nil
-        dir = git_pull(uri.to_s, File.join(RMK_DIR, File.basename(uri.path).sub(/\.git$/, '')), branch)
+        repo = GitRepo.new(uri.to_s, File.join(RMK_DIR, File.basename(uri.path).sub(/\.git$/, '')), branch)
+        dir = repo.pull
+        depends << repo
       end
       file = File.expand_path(File.join(dir, file))
       file = File.join(file, 'build.rmk') if File.directory?(file)
-      @cache[file] ||= load_inner(file)
+      depends << file
+      @cache[file] ||= load_inner(file,depends)
     end
 
-    def git_pull(remote, local, branch)
-      info_file = local + '.yaml'
-      info = {}
-      if File.directory?(local)
-        if File.readable?(info_file)
-          info = YAML.safe_load(File.read(info_file))
-          if info['branch'] != branch
-            system("git checkout #{branch}", chdir: local)
-            info['branch'] = branch
-            File.write(info_file, YAML.dump(info))
-          else
-            system('git pull', chdir: local)
-          end
-        else
-          system("git checkout #{branch}", chdir: local)
-          info['branch'] = branch
-          File.write(info_file, YAML.dump(info))
-        end
-      else
-        FileUtils.mkdir_p(File.dirname(local))
-        system("git clone --branch #{branch} #{remote} #{local}", chdir: File.dirname(local))
-        info['branch'] = branch
-        File.write(info_file, YAML.dump(info))
-      end
-      local
-    end
-
-    def load_inner(file)
+    def load_inner(file,depends)
       plan_class = Class.new(Plan)
       content = File.read(file)
       plan_class.file = file
       plan_class.module_eval(content, file, 1)
-      MethodCache.new(plan_class.new(self, file, Digest::MD5.hexdigest(content)))
+      MethodCache.new(plan_class.new(self, file, Digest::MD5.hexdigest(content),depends ))
     end
   end
 
