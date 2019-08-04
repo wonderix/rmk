@@ -99,7 +99,7 @@ module Gnu
     local_includes = files.map { |x| '-I' + File.dirname(x) }.uniq
     files.map do |cpp|
       basename, = File.basename(cpp.to_s).split('.')
-      job(basename + '.o', cpp, depends) do |hidden|
+      job(basename + '.o', cpp, depends) do |cpp, depends, implicit_dependencies| # rubocop:disable Lint/ShadowingOuterLocalVariable
         flags = depends.select { |d| d.respond_to?(:flags) }.flat_map(&:flags).uniq
         target_dir = File.join(build_dir, TARGET)
         ofile = File.join(target_dir, basename + '.o')
@@ -114,7 +114,7 @@ module Gnu
         content.gsub!(/\\$/, '')
         content = content.split
         content.shift
-        content.each { |h| hidden[h] = true }
+        content.each { |h| implicit_dependencies[h] = true }
         result = Cpp::ObjectFile.new(ofile)
         result.flags.concat(local_includes)
         result.flags.concat(options[:flags].to_s.split)
@@ -125,7 +125,7 @@ module Gnu
   end
 
   def ar(name, depends, _options = {})
-    job('lib' + name + '.a', depends) do
+    job('lib' + name + '.a', depends) do |depends| # rubocop:disable Lint/ShadowingOuterLocalVariable
       target_dir = File.join(build_dir, TARGET)
       FileUtils.mkdir_p(target_dir)
       lib = Cpp::Archive.new(File.join(target_dir, 'lib' + name + '.a'))
@@ -145,7 +145,7 @@ module Gnu
   end
 
   def ld(name, depends, _options = {})
-    job(name, depends) do
+    job(name, depends) do |depends| # rubocop:disable Lint/ShadowingOuterLocalVariable
       target_dir = File.join(build_dir, TARGET)
       FileUtils.mkdir_p(target_dir)
       ofile = File.join(target_dir, name)
@@ -171,7 +171,7 @@ module Gnu
 
   def ld_shared(name, depends, _options = {})
     name = 'lib' + name + '.so'
-    job(name, depends) do
+    job(name, depends) do |depends| # rubocop:disable Lint/ShadowingOuterLocalVariable
       target_dir = File.join(build_dir, TARGET)
       FileUtils.mkdir_p(target_dir)
       libflags = []

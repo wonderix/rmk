@@ -8,7 +8,7 @@ plugin 'go'
 def strings(*binaries)
   # create new job and pass all dependencies
   # when this item needs to be rebuild the given block is called
-  job('strings', binaries) do
+  job('strings', binaries) do |binaries| # rubocop:disable Lint/ShadowingOuterLocalVariable
     binaries.map do |binary|
       capture2("strings #{binary}")
     end

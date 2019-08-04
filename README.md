@@ -158,7 +158,7 @@ include Tools
 ef strings(*binaries)
   # create new job and pass all dependencies
   # when this item needs to be rebuild the given block is called
-  job('strings', binaries) do
+  job('strings', binaries) do |binaries|
     binaries.map do |binary|
       capture2("strings #{binary}")
     end

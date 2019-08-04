@@ -84,6 +84,11 @@ module Rmk
     end
 
     def start
+      @logs&.close
+      @connections.each do |c|
+        c << "data: null\n\n" unless c.closed?
+      end
+      @logs = File.open(File.join(@dir, 'logs.json'), 'w')
       @started_at = Time.now
     end
 

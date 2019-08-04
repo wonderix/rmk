@@ -17,19 +17,57 @@ class PlanMock
 end
 
 PLAN = PlanMock.new
+
 describe Rmk::Job do
   around(:each) do |example|
-    example.run
-    FileUtils.rm_rf(PLAN.build_dir)
+    EventMachine.run do
+      Fiber.new do
+        example.run
+        FileUtils.rm_rf(PLAN.build_dir)
+        EventMachine.stop
+      end.resume
+    end
+  end
+
+  it 'arguments are passed' do
+    job = Rmk::Job.new('job1', PLAN, [1, 2, 3, 4]) do |a, b, c, d|
+      expect(a).to be 1
+      expect(b).to be 2
+      expect(c).to be 3
+      expect(d).to be 4
+    end
+    job.build(Rmk::AlwaysBuildPolicy.new)
+    job.result
+  end
+
+  it 'arguments are passed with implicit_dependencies' do
+    job = Rmk::Job.new('job1', PLAN, [1, 2]) do |a, b, hidden|
+      expect(a).to be 1
+      expect(b).to be 2
+      expect(hidden).to satisfy{ |h| h.is_a?(Hash) }
+    end
+    job.build(Rmk::AlwaysBuildPolicy.new)
+    job.result
+  end
+
+  it 'jobs are passed as result' do
+    job1 = Rmk::Job.new('job1', PLAN, []) do
+      'hello'
+    end
+
+    job2 = Rmk::Job.new('job2', PLAN, [job1]) do |j|
+      j
+    end
+
+    job2.build(Rmk::ModificationTimeBuildPolicy.new)
+    expect(job2.result).to be 'hello'
   end
 
   it 'handle exceptions correct' do
-    plan = PlanMock.new
 
     job = Rmk::Job.new('job1', PLAN, []) do
       raise StandardError, 'test'
     end
-
     # start build
     job.build(Rmk::ModificationTimeBuildPolicy.new)
     expect(job.exception).not_to be_nil
@@ -37,14 +75,12 @@ describe Rmk::Job do
   end
 
   it 'propagate exceptions' do
-    plan = PlanMock.new
 
     job1 = Rmk::Job.new('job1', PLAN, []) do
-      puts 'running'
       raise StandardError, 'test'
     end
 
-    job2 = Rmk::Job.new('job2', PLAN, [job1]) do
+    job2 = Rmk::Job.new('job2', PLAN, [job1]) do |j|
     end
 
     expect { job2.build(Rmk::ModificationTimeBuildPolicy.new) }.to raise_error(StandardError)

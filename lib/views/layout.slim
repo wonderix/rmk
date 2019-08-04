@@ -6,9 +6,8 @@ html(lang='en')
     link(rel="stylesheet" href="https://stackpath.bootstrapcdn.com/font-awesome/4.7.0/css/font-awesome.min.css")
     link(rel="stylesheet" href=url("/css/rmk.css"))
     script(src="https://cdn.jsdelivr.net/npm/vue/dist/vue.js")
-    
   body
-    nav.blue.darken-2#header
+    nav.black.darken-2#header
       .nav-wrapper
         a.brand-logo.left href=url('/build/current') Ruby make
         div.right
@@ -19,7 +18,7 @@ html(lang='en')
             i(class="fa"  v-bind:class="{ 'fa-pause': running, 'fa-play': !running, 'blink': !running }" style="font-size: 200%; margin-right:20px")
     .body
       == yield
-    footer.page-footer.blue.darken-3
+    footer.page-footer.black.darken-3
       .footer-copyright
         .container
 javascript:

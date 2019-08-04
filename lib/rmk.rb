@@ -212,11 +212,11 @@ module Rmk
     end
 
     attr_reader :name, :plan, :depends, :block, :file
-    def initialize(name, plan, depends, &block)
-      depends = [depends] unless depends.is_a?(Array)
+    def initialize(name, plan, args, &block)
       @name = name
       @plan = plan
-      @depends = depends.flatten
+      @args = args
+      @depends = @args.flatten
       @block = block
       @result = nil
       @modified = false
@@ -312,30 +312,38 @@ module Rmk
       nil
     end
 
+    def self.map_result(args)
+      args.map do |arg|
+        if arg.is_a?(Rmk::Job)
+          arg.result
+        elsif arg.is_a?(Array)
+          Job.map_result(arg)
+        else
+          arg
+        end
+      end
+    end
+
     def build(policy)
       @modified = true
       begin
         policy.build(depends)
       rescue StandardError => e
+        @result = e
         raise save(e)
       end
       @result = Future.new(@name) do
         begin
           recursive_implicit_dependencies
           depends.select { |d| d.is_a?(Rmk::Job) }.each(&:result)
-          bdg = @block.binding
-          bdg.local_variables.each do |l|
-            value = bdg.local_variable_get(l)
-            bdg.local_variable_set(l, value.result) if value.is_a?(Rmk::Job)
-            bdg.local_variable_set(l, value.map { |v| v.is_a?(Rmk::Job) ? v.result : v }) if value.is_a?(Array)
-          end
-          save(@block.call(@recursive_implicit_dependencies))
+          args = Job.map_result(@args)
+          args << @recursive_implicit_dependencies if @block.arity > args.length
+          save(@block.call(*args))
         rescue StandardError => e
           raise save(e)
         end
       end
       return result if Job.threads == 1
-
       @result
     end
 
@@ -390,24 +398,23 @@ module Rmk
     end
 
     attr_accessor :md5
-    def initialize(build_file_cache, file, md5, depends)
+    def initialize(build_file_cache, file, md5)
       @build_file_cache = build_file_cache
       @file = file
       @dir = File.dirname(file)
       @md5 = md5
-      @depends = depends
     end
 
     def project(file)
-      @build_file_cache.load(file, @dir, @depends.clone)
+      @build_file_cache.load(file, @dir)
     end
 
     def self.job_method(*symbols)
       symbols.each do |sym|
         proxy = Module.new do
           define_method(sym) do |*args|
-            job(sym.to_s, args) do
-              super *args
+            job(sym.to_s, args) do |*converted_args|
+              super(*converted_args)
             end
           end
         end
@@ -421,7 +428,7 @@ module Rmk
     end
 
     def job(name, *depends, &block)
-      Job.new(name, self, depends + @depends, &block)
+      Job.new(name, self, depends , &block)
     end
 
     def glob(pattern)
@@ -499,34 +506,31 @@ module Rmk
       @cache = {}
     end
 
-    def load(file, dir = '.', depends = [])
+    def load(file, dir = '.')
       case dir
       when %r{git@([^:]*):(.*)/([^#]*)(#.*|)}
         fragment = Regexp.last_match(4)
         path = Regexp.last_match(3).sub(/\.git$/, '')
         repo = GitRepo.new(dir, File.join(RMK_DIR, path), fragment.empty? ? 'master' : fragment[1..-1])
         dir = repo.pull
-        depends << repo
       when %r{https{0,1}://}
         uri = URI.parse(dir)
         branch = uri.fragment || 'master'
         uri.fragment = nil
         repo = GitRepo.new(uri.to_s, File.join(RMK_DIR, File.basename(uri.path).sub(/\.git$/, '')), branch)
         dir = repo.pull
-        depends << repo
       end
       file = File.expand_path(File.join(dir, file))
       file = File.join(file, 'build.rmk') if File.directory?(file)
-      depends << file
-      @cache[file] ||= load_inner(file, depends)
+      @cache[file] ||= load_inner(file)
     end
 
-    def load_inner(file, depends)
+    def load_inner(file)
       plan_class = Class.new(Plan)
       content = File.read(file)
       plan_class.file = file
       plan_class.module_eval(content, file, 1)
-      MethodCache.new(plan_class.new(self, file, Digest::MD5.hexdigest(content), depends))
+      MethodCache.new(plan_class.new(self, file, Digest::MD5.hexdigest(content)))
     end
   end
 

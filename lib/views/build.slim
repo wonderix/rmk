@@ -1,6 +1,6 @@
 template#item-template
   li.browser-default
-    div(v-on:click="toggle" v-bind:class="{ error: node.exception, ok: !node.exception}" )
+    div(v-on:click="toggle" v-bind:class="{ 'build-error': node.exception, build-ok: !node.exception}" )
       span(v-bind:class="{bold: isFolder}" style ="font-size: 150%") {{ node.name }} 
       span(style ="padding-left: 10px; font-size: 80%") {{ node.dir }}
       span(v-if="isFolder" ) [ {{ isOpen ? '-' : '+' }} ]
@@ -88,7 +88,11 @@ javascript:
     created: function () {
       let self = this;
       new EventSource(self.url + '/log/stream').onmessage = function(e) {
-        self.logs.push(JSON.parse(e.data));
+        if ( e.data == "null" ){
+          self.logs.length = 0 
+        } else {
+          self.logs.push(JSON.parse(e.data));
+        }
       }
       new EventSource("#{url('/status')}").onmessage = function(e) {
         if ( e.data == "finished" ) {
@@ -103,7 +107,7 @@ javascript:
               self.history = json
             })
           })
-       }
+        }
       }
     },
     updated: function () {

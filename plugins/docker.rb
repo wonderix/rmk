@@ -68,14 +68,14 @@ module Docker
   def docker_build(name, docker_file: 'Dockerfile', docker_dir: '.', depends: [], tags: ['latest'], hub: '', build_args: {})
     docker_dir = File.join(dir, docker_dir)
     docker_file = File.join(dir, docker_file)
-    job("#{hub}#{name}", docker_file, depends) do |hidden|
+    job("#{hub}#{name}", docker_file, depends) do |docker_file, depends, implicit_dependencies| # rubocop:disable Lint/ShadowingOuterLocalVariable
       DockerfileParser.load_file(docker_file).each do |cmd|
         case cmd[:command]
         when 'COPY', 'ADD'
           unless cmd[:params][:src].start_with?('--')
             begin
               Find.find(File.join(docker_dir, cmd[:params][:src])) do |path|
-                hidden[path] = true if File.file?(path)
+                implicit_dependencies[path] = true if File.file?(path)
               end
             rescue StandardError => e
               raise "Unable to read '#{cmd[:params][:src]}' required for #{docker_file}: #{e}"
@@ -94,7 +94,7 @@ module Docker
   end
 
   def docker_push(tags)
-    job("docker/#{tags.name}", tags) do
+    job("docker/#{tags.name}", tags) do |tags| # rubocop:disable Lint/ShadowingOuterLocalVariable
       tags.each do |tag|
         system("docker push #{tag}")
       end
