@@ -43,6 +43,9 @@
 
 .body {
     padding: 0px;
+}
+
+body {
     background-color: #3D3C3C;
     color: white;
 }
