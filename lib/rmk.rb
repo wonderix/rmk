@@ -413,7 +413,7 @@ module Rmk
       symbols.each do |sym|
         proxy = Module.new do
           define_method(sym) do |*args|
-            job(sym.to_s, args) do |*converted_args|
+            job(sym.to_s, args) do |converted_args|
               super(*converted_args)
             end
           end
