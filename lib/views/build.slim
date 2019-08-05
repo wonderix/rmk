@@ -1,6 +1,6 @@
 template#item-template
   li.browser-default
-    div(v-on:click="toggle" v-bind:class="{ 'build-error': node.exception, build-ok: !node.exception}" )
+    div(v-on:click="toggle" v-bind:class="{ 'build-error': node.exception, 'build-ok': !node.exception}" )
       span(v-bind:class="{bold: isFolder}" style ="font-size: 150%") {{ node.name }} 
       span(style ="padding-left: 10px; font-size: 80%") {{ node.dir }}
       span(v-if="isFolder" ) [ {{ isOpen ? '-' : '+' }} ]
@@ -20,7 +20,7 @@ div
     div.terminal(v-if="node.exception" v-cloak="")
       .error() {{ node.exception }}
     h5 Logs
-    div#scroll(style="overflow-y: scroll; height:400px;")
+    div#scroll(style="overflow-y: scroll; height:600px;")
       table.terminal.code
         thead
         tbody.code
