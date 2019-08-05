@@ -6,11 +6,10 @@ require_relative '../lib/rmk.rb'
 class MyPlan < Rmk::Plan
   job_method :method1, :method2
   def method1(a)
-    raise "Invalid parameter" unless a == 1
+    "method1(#{a})"
   end
   def method2(a, b)
-    raise "Invalid parameter" unless a == 1
-    raise "Invalid parameter" unless b == 2
+    "method2(#{a}, #{b})"
   end
 end
 
@@ -29,10 +28,10 @@ describe Rmk::Plan do
     plan = MyPlan.new(nil,"","")
     job1 = plan.method1(1)
     job1.build(Rmk::AlwaysBuildPolicy.new())
-    job1.result
+    expect(job1.result).to eq("method1(1)")
     job2 = plan.method2(1, 2)
     job2.build(Rmk::AlwaysBuildPolicy.new())
-    job2.result
+    expect(job2.result).to eq("method2(1, 2)")
   end
 
 end
