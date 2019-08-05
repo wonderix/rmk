@@ -72,7 +72,7 @@ module Docker
       DockerfileParser.load_file(docker_file).each do |cmd|
         case cmd[:command]
         when 'COPY', 'ADD'
-          unless cmd[:params][:src].start_with?('--')
+          unless cmd[:params][:src].start_with?('--') || cmd[:params][:src].start_with?('https://')
             begin
               Find.find(File.join(docker_dir, cmd[:params][:src])) do |path|
                 implicit_dependencies[path] = true if File.file?(path)
