@@ -200,6 +200,7 @@ module Rmk
     def build(policy: nil, interval: @build_interval, jobs: nil)
       @status.value = :building
       @build_history.current.start
+      @build_history.current.graph = BuildGraph.scan_root(@controller,@controller.load_jobs)
       @controller.run(policy: policy, jobs: jobs) do |result_jobs|
         graph = BuildGraph.scan_root(@controller, result_jobs)
         @build_history.current.graph = graph

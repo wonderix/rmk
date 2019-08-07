@@ -746,7 +746,8 @@ module Rmk
     def load_jobs
       build_file_cache = PlanCache.new
       build_file = build_file_cache.load('build.rmk', @dir)
-      build_file.send(@task.intern)
+      jobs = build_file.send(@task.intern)
+      jobs.is_a?(Array) ? jobs.flatten : [jobs]
     end
   end
 end

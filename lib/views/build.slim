@@ -20,7 +20,7 @@ div
     div.terminal(v-if="node.exception" v-cloak="")
       .error() {{ node.exception }}
     h5 Logs
-    div#scroll(style="overflow-y: scroll; height:600px;")
+    div#scroll(style="overflow-y: scroll; height:700px;")
       table.terminal.code
         thead
         tbody.code
@@ -80,7 +80,7 @@ javascript:
     methods: {
       scrollBottom: function() {
         let scroll = document.getElementById("scroll")
-        if ( scroll.scrollHeight - scroll.scrollTop < 500 ) {
+        if ( scroll.scrollHeight - scroll.scrollTop < 800 ) {
           scroll.scrollTop = scroll.scrollHeight;
         }
       }
