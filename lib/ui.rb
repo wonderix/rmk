@@ -129,6 +129,7 @@ module Rmk
         c << "data: #{log.to_json}\n\n" unless c.closed?
       end
       @logs.puts(log.to_json)
+      @logs.flush
     end
 
     def commit(target)
@@ -144,6 +145,9 @@ module Rmk
 
     def subscribe(out)
       @connections << out
+      logs.each do |log|
+        out << "data: #{log.to_json}\n\n"
+      end
       @connections.reject!(&:closed?)
     end
   end
