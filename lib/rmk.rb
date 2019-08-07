@@ -568,17 +568,17 @@ module Rmk
           rebuild = false
           mtime = job.mtime
           (job.recursive_explicit_dependencies + job.recursive_implicit_dependencies).each do |d|
-            begin
-              dmtime = d.respond_to?(:mtime) ? d.mtime : File.mtime(d)
-              next unless dmtime > mtime
-              raise "Rebuilding #{job.name}(#{mtime}) because #{Tools.relative(d)}(#{dmtime}) is newer" if @readonly
-
-              puts "Rebuilding #{job.name}(#{mtime}) because #{Tools.relative(d)}(#{dmtime}) is newer" if Rmk.verbose > 0
-              rebuild = true
-              break
-            rescue Errno::ENOENT
-              # job dependency is not a file
+            dmtime = begin
+              d.respond_to?(:mtime) ? d.mtime : File.mtime(d)
+            rescue Errno::ENOENT 
+              Time.at(0)
             end
+            next unless dmtime > mtime
+            raise "Rebuilding #{job.name}(#{mtime}) because #{Tools.relative(d)}(#{dmtime}) is newer" if @readonly
+
+            puts "Rebuilding #{job.name}(#{mtime}) because #{Tools.relative(d)}(#{dmtime}) is newer" if Rmk.verbose > 0
+            rebuild = true
+            break
           end
         else
           raise "Rebuilding #{job.name} because #{job.file} doesn't exist" if @readonly
