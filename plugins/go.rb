@@ -33,10 +33,11 @@ module Go
     end
   end
 
-  def go_coverage(package, limits, mod: 'readonly')
+  def go_coverage(package, min_coverage, min_coverage_per_package: {}, mod: 'readonly')
     files = go_files(package, true)
     job('go/coverage', files) do |files, implicit_dependencies| # rubocop:disable Lint/ShadowingOuterLocalVariable
       output = File.join(build_dir, 'coverage')
+      Rmk.stdout.write("go test -cover -mod=#{mod} #{package}\n")
       coverage = StringIO.new(capture2("go test -cover -mod=#{mod} #{package}"))
       while (line = coverage.gets)
         next unless line =~ /ok\s+(\S+)\s+.*coverage:\s+(\d+\.\d+)%/
@@ -44,7 +45,7 @@ module Go
         percent = Regexp.last_match(2).to_f
         pkg = Regexp.last_match(1).sub(%r{[^\/]*\/[^\/]*\/[^\/]*\/*}, '')
         pkg = '.' if pkg.empty?
-        limit = limits[pkg] || 0.0
+        limit = min_coverage_per_package[pkg] || min_coverage
         raise "Coverage for package #{pkg} (#{percent}%) fallen below #{limit}%" if percent < limit
       end
       go_hidden(files, package, implicit_dependencies)

@@ -154,6 +154,7 @@ module Rmk
 
     def system(cmd, chdir: nil)
       popen3(cmd, out: Rmk.stdout, chdir: chdir)
+      true
     end
 
     def capture2(cmd, chdir: nil, trace: false)
@@ -567,13 +568,17 @@ module Rmk
           rebuild = false
           mtime = job.mtime
           (job.recursive_explicit_dependencies + job.recursive_implicit_dependencies).each do |d|
-            dmtime = d.respond_to?(:mtime) ? d.mtime : File.mtime(d)
-            next unless dmtime > mtime
-            raise "Rebuilding #{job.name}(#{mtime}) because #{Tools.relative(d)}(#{dmtime}) is newer" if @readonly
+            begin
+              dmtime = d.respond_to?(:mtime) ? d.mtime : File.mtime(d)
+              next unless dmtime > mtime
+              raise "Rebuilding #{job.name}(#{mtime}) because #{Tools.relative(d)}(#{dmtime}) is newer" if @readonly
 
-            puts "Rebuilding #{job.name}(#{mtime}) because #{Tools.relative(d)}(#{dmtime}) is newer" if Rmk.verbose > 0
-            rebuild = true
-            break
+              puts "Rebuilding #{job.name}(#{mtime}) because #{Tools.relative(d)}(#{dmtime}) is newer" if Rmk.verbose > 0
+              rebuild = true
+              break
+            rescue Errno::ENOENT
+              # job dependency is not a file
+            end
           end
         else
           raise "Rebuilding #{job.name} because #{job.file} doesn't exist" if @readonly
