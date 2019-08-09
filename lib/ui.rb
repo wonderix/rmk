@@ -223,17 +223,19 @@ module Rmk
 
       EventMachine.next_tick do
         unless  @status.value == :building
-          @build_triggered = false
-          @status.value = :building
-          @build_history.current.start
-          @build_history.current.graph = BuildGraph.scan_root(@controller, @controller.load_jobs)
-          @controller.run do |result_jobs|
-            graph = BuildGraph.scan_root(@controller, result_jobs)
-            @build_history.current.graph = graph
-            @build_history.commit
-            @file_trigger.watch(Rmk::Job.recursive_file_dependencies(result_jobs))
-            @status.value = :finished
-          end
+          Fiber.new do
+            @build_triggered = false
+            @status.value = :building
+            @build_history.current.start
+            @build_history.current.graph = BuildGraph.scan_root(@controller, @controller.load_jobs)
+            @controller.run do |result_jobs|
+              graph = BuildGraph.scan_root(@controller, result_jobs)
+              @build_history.current.graph = graph
+              @build_history.commit
+              @file_trigger.watch(Rmk::Job.recursive_file_dependencies(result_jobs))
+              @status.value = :finished
+            end
+          end.resume
           @status.value = :idle
           build if @build_triggered
         else
