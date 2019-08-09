@@ -25,6 +25,18 @@ module Go
     end
   end
 
+  def go_check_fmt(package)
+    go_files(package).map do |file|
+      job('go/check_fmt/' + File.basename(file, '.go'), file) do |file|  # rubocop:disable Lint/ShadowingOuterLocalVariable
+        Rmk.stdout.write("gofmt -l #{file}\n")
+        stdout = StringIO.new(capture2("gofmt -l #{file}"))
+        if (stdout.gets)
+          raise Rmk::BuildError.new("gofmt found issues", file)
+        end
+      end
+    end
+  end
+
   def go_lint(package)
     go_files(package).map do |file|
       job('go/lint/' + File.basename(file, '.go'), file) do |file| # rubocop:disable Lint/ShadowingOuterLocalVariable
@@ -43,10 +55,11 @@ module Go
         next unless line =~ /ok\s+(\S+)\s+.*coverage:\s+(\d+\.\d+)%/
 
         percent = Regexp.last_match(2).to_f
-        pkg = Regexp.last_match(1).sub(%r{[^\/]*\/[^\/]*\/[^\/]*\/*}, '')
+        pkg = Regexp.last_match(1)
         pkg = '.' if pkg.empty?
         limit = min_coverage_per_package[pkg] || min_coverage
-        raise "Coverage for package #{pkg} (#{percent}%) fallen below #{limit}%" if percent < limit
+        raise Rmk::BuildError.new("Coverage for package '#{pkg}' is too low (#{percent}%<#{limit}%)", pkg) if percent < limit
+        Rmk.stdout.write("#{percent}% #{pkg}\n")
       end
       go_hidden(files, package, implicit_dependencies)
       output
