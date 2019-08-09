@@ -55,10 +55,11 @@ module Go
         next unless line =~ /ok\s+(\S+)\s+.*coverage:\s+(\d+\.\d+)%/
 
         percent = Regexp.last_match(2).to_f
-        pkg = Regexp.last_match(1).sub(%r{[^\/]*\/[^\/]*\/[^\/]*\/*}, '')
+        pkg = Regexp.last_match(1)
         pkg = '.' if pkg.empty?
         limit = min_coverage_per_package[pkg] || min_coverage
-        raise "Coverage for package #{pkg} (#{percent}%) fallen below #{limit}%" if percent < limit
+        raise Rmk::BuildError.new("Coverage for package '#{pkg}' is too low (#{percent}%<#{limit}%)", pkg) if percent < limit
+        Rmk.stdout.write("#{percent}% #{pkg}\n")
       end
       go_hidden(files, package, implicit_dependencies)
       output
