@@ -6,7 +6,6 @@ require 'thin'
 require 'slim'
 require 'json'
 require 'ostruct'
-require 'listen'
 
 # rubocop:disable Documentation
 
@@ -185,16 +184,9 @@ module Rmk
   class FileTrigger
     def initialize()
       @last_change = Time.now()
-    end
-
-    def watch(files)
-      @listener&.stop
-      dirs = {}
-      files.each do |f|
-        ( dirs[File.dirname(f)] ||= [] ) << f
-      end
-      @listener = Listen.to(*dirs.keys) do |modified, added, removed|
-        files.each do  |f|
+      @files = []
+      EventMachine.add_periodic_timer(5)  do
+        @files.each do  |f|
           if File.mtime(f) > @last_change
             Trigger.trigger
             @last_change = Time.now
@@ -202,7 +194,10 @@ module Rmk
           end
         end
       end
-      @listener.start
+    end
+
+    def watch(files)
+      @files = files
     end
   end
 
