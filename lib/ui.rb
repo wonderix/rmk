@@ -194,7 +194,13 @@ module Rmk
         ( dirs[File.dirname(f)] ||= [] ) << f
       end
       @listener = Listen.to(*dirs.keys) do |modified, added, removed|
-        Trigger.trigger
+        files.each do  |f|
+          if File.mtime(f) > @last_change
+            Trigger.trigger
+            @last_change = Time.now
+            break
+          end
+        end
       end
       @listener.start
     end
@@ -215,6 +221,23 @@ module Rmk
       @build_triggered = false
       @file_trigger = FileTrigger.new
       Trigger.subscribe { build }
+      controller.before_build do |jobs|
+        @status.value = :building
+        @build_history.current.start
+        @build_history.current.graph = BuildGraph.scan_root(@controller, @controller.load_jobs)
+      end
+      controller.after_build do |result_jobs|
+        graph = BuildGraph.scan_root(@controller, result_jobs)
+        @build_history.current.graph = graph
+        @build_history.commit
+        @file_trigger.watch(Rmk::Job.recursive_file_dependencies(result_jobs))
+        @status.value = :finished
+        @status.value = :idle
+        if @build_triggered
+          @build_triggered = false
+          build
+        end
+      end
       build
     end
 
@@ -222,22 +245,8 @@ module Rmk
       return unless @running.value
 
       EventMachine.next_tick do
-        unless  @status.value == :building
-          Fiber.new do
-            @build_triggered = false
-            @status.value = :building
-            @build_history.current.start
-            @build_history.current.graph = BuildGraph.scan_root(@controller, @controller.load_jobs)
-            @controller.run do |result_jobs|
-              graph = BuildGraph.scan_root(@controller, result_jobs)
-              @build_history.current.graph = graph
-              @build_history.commit
-              @file_trigger.watch(Rmk::Job.recursive_file_dependencies(result_jobs))
-              @status.value = :finished
-            end
-          end.resume
-          @status.value = :idle
-          build if @build_triggered
+        if  @status.value == :idle
+          @controller.run
         else
           @build_triggered = true
         end
@@ -306,19 +315,16 @@ module Rmk
     end
 
     def self.run(controller)
-      EventMachine.run do
+      web_app = App.new(controller)
 
-        web_app = App.new(controller)
-
-        dispatch = Rack::Builder.app do
-          map '/' do
-            run web_app
-          end
+      dispatch = Rack::Builder.app do
+        map '/' do
+          run web_app
         end
-
-        Rack::Server.start(app: dispatch, server: 'thin', Host: '0.0.0.0',
-                           Port: '8181', signals: false)
       end
+
+      Rack::Server.start(app: dispatch, server: 'thin', Host: '0.0.0.0',
+                          Port: '8181', signals: false)
     end
   end
 end

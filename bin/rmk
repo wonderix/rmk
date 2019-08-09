@@ -39,15 +39,15 @@ end.parse!
 
 controller.task = ARGV[0] || controller.task
 
-if ui
-  require_relative '../lib/ui.rb'
-  Rmk::App.run(controller)
-else
-  result = 0
-  EventMachine.run do
-    result = controller.run do
+EventMachine.run do
+  if ui
+    require_relative '../lib/ui.rb'
+    Rmk::App.run(controller)
+  else
+    result = 0
+    controller.after_build do
       EventMachine.stop
     end
+    controller.run
   end
-  exit(result)
 end

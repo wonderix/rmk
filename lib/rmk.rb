@@ -499,10 +499,8 @@ module Rmk
       @branch = branch
       @next_pull = Time.at(0)
       EventMachine.add_periodic_timer(60)  do
-        Fiber.new do
-          capture2("git fetch", chdir: @local)
-          Trigger.trigger unless capture2("git status -uno", chdir: @local) =~ /branch is up to date/
-        end.resume
+        capture2("git fetch", chdir: @local)
+        Trigger.trigger unless capture2("git status -uno", chdir: @local) =~ /branch is up to date/
       end
     end
 
@@ -752,34 +750,43 @@ module Rmk
       @dir = Dir.getwd
       @policy = ModificationTimeBuildPolicy.new
       @task = 'all'
+      @before_build = []
+      @after_build = []
     end
 
-    def run(policy: nil, jobs: nil)
-      policy ||= @policy
+    def before_build(&block)
+      @before_build << block
+    end
+
+    def after_build(&block)
+      @after_build << block
+    end
+
+    def run()
+      policy = @policy
       result = 0
-      EventMachine.run do
-        Fiber.new do
-          jobs ||= load_jobs
-          jobs = jobs.is_a?(Array) ? jobs.flatten : [jobs]
-          jobs.each(&:reset)
-          begin
-            item = policy.build(jobs)
-            results = Rmk::Job.results(item)
-            Rmk.stdout.write results.inspect if Rmk.verbose > 0 # rubocop:disable Metrics/LineLength, Style/NumericPredicate
-          rescue BuildError => e
-            Rmk.stderr.write(e.message + "\n")
-            Rmk.stderr.write(e.backtrace.join("\n")) if Rmk.verbose > 0 # rubocop:disable Metrics/LineLength, Style/NumericPredicate
-            Rmk.stdout.write "Build Failed in #{e.dir}\n"
-            result = 1
-          rescue StandardError => e
-            Rmk.stderr.write(e.message + "\n")
-            Rmk.stderr.write(e.backtrace.join("\n"))
-            Rmk.stdout.write "Build Failed\n"
-            result = 1
-          end
-          yield jobs if block_given?
-        end.resume
-      end
+      Fiber.new do
+        jobs ||= load_jobs
+        jobs = jobs.is_a?(Array) ? jobs.flatten : [jobs]
+        jobs.each(&:reset)
+        @before_build.each {|b| b.call(jobs)}
+        begin
+          item = policy.build(jobs)
+          results = Rmk::Job.results(item)
+          Rmk.stdout.write results.inspect if Rmk.verbose > 0 # rubocop:disable Metrics/LineLength, Style/NumericPredicate
+        rescue BuildError => e
+          Rmk.stderr.write(e.message + "\n")
+          Rmk.stderr.write(e.backtrace.join("\n")) if Rmk.verbose > 0 # rubocop:disable Metrics/LineLength, Style/NumericPredicate
+          Rmk.stdout.write "Build Failed in #{e.dir}\n"
+          result = 1
+        rescue StandardError => e
+          Rmk.stderr.write(e.message + "\n")
+          Rmk.stderr.write(e.backtrace.join("\n"))
+          Rmk.stdout.write "Build Failed\n"
+          result = 1
+        end
+        @after_build.each {|b| b.call(jobs)}
+      end.resume
       result
     end
 
