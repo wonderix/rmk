@@ -498,9 +498,11 @@ module Rmk
       @local = local
       @branch = branch
       @next_pull = Time.at(0)
-      EventMachine.add_periodic_timer(60)  do
-        capture2("git fetch", chdir: @local)
-        Trigger.trigger unless capture2("git status -uno", chdir: @local) =~ /branch is up to date/
+      EventMachine.add_periodic_timer(1)  do
+        Fiber.new do
+          capture2("git fetch", chdir: @local)
+          Trigger.trigger unless capture2("git status -uno", chdir: @local) =~ /branch is up to date/
+        end.resume
       end
     end
 
