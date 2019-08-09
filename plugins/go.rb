@@ -12,7 +12,7 @@ module Go
   def go_build(name, package, mod: 'readonly', depends: [], goos: nil)
     name = goos ? File.join(goos, name) : name
     files = go_files(package)
-    job('go/' + name, files, depends) do |files, depends, implicit_dependencies| # rubocop:disable Lint/ShadowingOuterLocalVariable
+    job('go/' + name, files, depends) do |files, _depends, implicit_dependencies| # rubocop:disable Lint/ShadowingOuterLocalVariable
       output = File.join(build_dir, name)
       ENV['GOOS'] = goos if goos
       begin
@@ -27,7 +27,7 @@ module Go
 
   def go_lint(package)
     go_files(package).map do |file|
-      job('go/lint/' + File.basename(file, '.go'), file) do |file|  # rubocop:disable Lint/ShadowingOuterLocalVariable
+      job('go/lint/' + File.basename(file, '.go'), file) do |file| # rubocop:disable Lint/ShadowingOuterLocalVariable
         system("golint -set_exit_status #{file}")
       end
     end

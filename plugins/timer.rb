@@ -5,16 +5,26 @@ module Timer
     def initialize(interval, base)
       @interval = interval
       @base = base
-      mtime
+      @mtime = Time.now
+      trigger
     end
 
     def mtime
-      offset = ((Time.now - @base) / @interval).to_i * @interval
-      @time = @base + offset
+      @mtime
     end
 
     def result
-      @time
+      @mtime
+    end
+
+    def trigger
+      now = Time.now
+      next_trigger = @base + (((now - @base) / @interval).to_i + 1) * @interval
+      EventMachine.add_timer(next_trigger - now) do
+        @mtime = Time.now
+        Trigger.trigger
+        trigger
+      end
     end
 
     def to_s

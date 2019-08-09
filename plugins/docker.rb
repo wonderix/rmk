@@ -68,7 +68,7 @@ module Docker
   def docker_build(name, docker_file: 'Dockerfile', docker_dir: '.', depends: [], tags: ['latest'], hub: '', build_args: {})
     docker_dir = File.join(dir, docker_dir)
     docker_file = File.join(dir, docker_file)
-    job("#{hub}#{name}", docker_file, depends) do |docker_file, depends, implicit_dependencies| # rubocop:disable Lint/ShadowingOuterLocalVariable
+    job("#{hub}#{name}", docker_file, depends) do |docker_file, _depends, implicit_dependencies| # rubocop:disable Lint/ShadowingOuterLocalVariable
       DockerfileParser.load_file(docker_file).each do |cmd|
         case cmd[:command]
         when 'COPY', 'ADD'

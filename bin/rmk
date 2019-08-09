@@ -2,7 +2,6 @@
 # frozen_string_literal: true
 
 require_relative '../lib/rmk.rb'
-require_relative '../lib/ui.rb'
 
 controller = Rmk::Controller.new
 ui = false
@@ -33,9 +32,6 @@ OptionParser.new do |opts|
   opts.on('-t', '--threads [N]', 'allow N threads at parallel') do |v|
     Rmk::Job.threads = v.to_i
   end
-  opts.on('-i', '--build-interval [seconds]', 'Build interval for UI') do |v|
-    build_interval = v.to_i
-  end
   opts.on('-u', '--ui', 'start web ui') do
     ui = true
   end
@@ -44,7 +40,8 @@ end.parse!
 controller.task = ARGV[0] || controller.task
 
 if ui
-  Rmk::App.run(controller, build_interval)
+  require_relative '../lib/ui.rb'
+  Rmk::App.run(controller)
 else
   result = 0
   EventMachine.run do

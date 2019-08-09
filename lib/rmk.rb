@@ -47,6 +47,29 @@ module Rmk
 
   RMK_DIR = File.expand_path('~/.rmk')
 
+  def self.mtime(r)
+    begin
+      return r.respond_to?(:mtime) ? r.mtime : File.mtime(r)
+    rescue Errno::ENOENT
+      return Time.at(0)
+    end
+  end
+
+  class Trigger
+    class << self
+      def trigger
+        return unless @subscribers
+
+        @subscribers.each(&:call)
+      end
+
+      def subscribe(&block)
+        @subscribers ||= []
+        @subscribers << block
+      end
+    end
+  end
+
   class MethodCache
     def initialize(delegate)
       @cache = {}
@@ -345,6 +368,7 @@ module Rmk
         end
       end
       return result if Job.threads == 1
+
       @result
     end
 
@@ -370,6 +394,12 @@ module Rmk
         end
       end
       result ? result.merge!(@recursive_implicit_dependencies) : @recursive_implicit_dependencies.keys
+    end
+
+    def self.recursive_file_dependencies(jobs)
+      jobs.map{ |j| j.recursive_explicit_dependencies + j.recursive_implicit_dependencies}.
+      flatten.
+      select{ |f| f.is_a?(String) && File.exists?(f)}
     end
 
     def to_s
@@ -429,7 +459,7 @@ module Rmk
     end
 
     def job(name, *depends, &block)
-      Job.new(name, self, depends , &block)
+      Job.new(name, self, depends, &block)
     end
 
     def glob(pattern)
@@ -455,11 +485,23 @@ module Rmk
 
   class GitRepo
     include Tools
+
+    class << self
+      def create(remote, local, branch)
+        @cache ||= {}
+        return @cache["#{remote}:#{local}:#{branch}"] ||= GitRepo.new(remote, local, branch)
+      end
+    end
+
     def initialize(remote, local, branch)
       @remote = remote
       @local = local
       @branch = branch
       @next_pull = Time.at(0)
+      EventMachine.add_periodic_timer(60)  do
+        capture2("git fetch", chdir: @local)
+        Trigger.trigger unless capture2("git status -uno", chdir: @local) =~ /branch is up to date/
+      end
     end
 
     def mtime
@@ -512,13 +554,13 @@ module Rmk
       when %r{git@([^:]*):(.*)/([^#]*)(#.*|)}
         fragment = Regexp.last_match(4)
         path = Regexp.last_match(3).sub(/\.git$/, '')
-        repo = GitRepo.new(dir, File.join(RMK_DIR, path), fragment.empty? ? 'master' : fragment[1..-1])
+        repo = GitRepo.create(dir, File.join(RMK_DIR, path), fragment.empty? ? 'master' : fragment[1..-1])
         dir = repo.pull
       when %r{https{0,1}://}
         uri = URI.parse(dir)
         branch = uri.fragment || 'master'
         uri.fragment = nil
-        repo = GitRepo.new(uri.to_s, File.join(RMK_DIR, File.basename(uri.path).sub(/\.git$/, '')), branch)
+        repo = GitRepo.create(uri.to_s, File.join(RMK_DIR, File.basename(uri.path).sub(/\.git$/, '')), branch)
         dir = repo.pull
       end
       file = File.expand_path(File.join(dir, file))
@@ -568,11 +610,7 @@ module Rmk
           rebuild = false
           mtime = job.mtime
           (job.recursive_explicit_dependencies + job.recursive_implicit_dependencies).each do |d|
-            dmtime = begin
-              d.respond_to?(:mtime) ? d.mtime : File.mtime(d)
-            rescue Errno::ENOENT 
-              Time.at(0)
-            end
+            dmtime = Rmk.mtime(d)
             next unless dmtime > mtime
             raise "Rebuilding #{job.name}(#{mtime}) because #{Tools.relative(d)}(#{dmtime}) is newer" if @readonly
 

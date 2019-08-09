@@ -6,10 +6,12 @@ require 'thin'
 require 'slim'
 require 'json'
 require 'ostruct'
+require 'listen'
 
 # rubocop:disable Documentation
 
 module Rmk
+
   class BuildGraph
     def self.scan(job, graph)
       return unless job.is_a?(Rmk::Job)
@@ -133,7 +135,7 @@ module Rmk
     end
 
     def commit(target)
-      @logs.close
+      @logs&.close
       @logs = nil
       g = graph
       File.write(File.join(@dir, 'graph.json'), g.to_json)
@@ -180,10 +182,28 @@ module Rmk
     end
   end
 
+  class FileTrigger
+    def initialize()
+      @last_change = Time.now()
+    end
+
+    def watch(files)
+      @listener&.stop
+      dirs = {}
+      files.each do |f|
+        ( dirs[File.dirname(f)] ||= [] ) << f
+      end
+      @listener = Listen.to(*dirs.keys) do |modified, added, removed|
+        Trigger.trigger
+      end
+      @listener.start
+    end
+  end
+
   class App < Sinatra::Base
     helpers Sinatra::Streaming
 
-    def initialize(controller, build_interval)
+    def initialize(controller)
       super()
       @build_history = BuildHistory.new(File.join(controller.dir, '.rmk/history'))
       @controller = controller
@@ -192,35 +212,33 @@ module Rmk
       Rmk.stderr = @sse_logger.writer(:error, @build_history)
       @status = Subscribable.new(:idle)
       @running = Subscribable.new(true)
-      @queue = EventMachine::Queue.new
-      @build_interval = build_interval
-      enqueue_build
+      @build_triggered = false
+      @file_trigger = FileTrigger.new
+      Trigger.subscribe { build }
+      build
     end
 
-    def build(policy: nil, interval: @build_interval, jobs: nil)
-      @status.value = :building
-      @build_history.current.start
-      @build_history.current.graph = BuildGraph.scan_root(@controller,@controller.load_jobs)
-      @controller.run(policy: policy, jobs: jobs) do |result_jobs|
-        graph = BuildGraph.scan_root(@controller, result_jobs)
-        @build_history.current.graph = graph
-        if result_jobs.reduce(false) { |acc, j| acc ||= j.modified? }
-          @build_history.commit
-        end
-        @status.value = :finished
-        if interval
-          EventMachine.add_timer(interval) do
-            enqueue_build(policy: policy, interval: interval, jobs: jobs) if @running.value
+    def build
+      return unless @running.value
+
+      EventMachine.next_tick do
+        unless  @status.value == :building
+          @build_triggered = false
+          @status.value = :building
+          @build_history.current.start
+          @build_history.current.graph = BuildGraph.scan_root(@controller, @controller.load_jobs)
+          @controller.run do |result_jobs|
+            graph = BuildGraph.scan_root(@controller, result_jobs)
+            @build_history.current.graph = graph
+            @build_history.commit
+            @file_trigger.watch(Rmk::Job.recursive_file_dependencies(result_jobs))
+            @status.value = :finished
           end
+          @status.value = :idle
+          build if @build_triggered
+        else
+          @build_triggered = true
         end
-        @status.value = :idle
-      end
-    end
-
-    def enqueue_build(policy: nil, interval: @build_interval, jobs: nil)
-      @queue.push(policy: policy, interval: interval, jobs: jobs) # rubocup:disable Style/BracesAroundHashParameters, Metrics/LineLength
-      @queue.pop do |options|
-        build(**options)
       end
     end
 
@@ -249,9 +267,8 @@ module Rmk
     end
 
     get '/rebuild/:id' do
-      halt 404 unless @build_history.get(params['id'])
-      enqueue_build(policy: LocalBuildPolicy.new, jobs: @build_result.jobs, interval: nil)
-      redirect to("/build/#{params['id']}")
+      Trigger.trigger
+      redirect to('/build/current')
     end
 
     get '/favicon.ico' do
@@ -286,9 +303,10 @@ module Rmk
       end
     end
 
-    def self.run(controller, build_interval)
+    def self.run(controller)
       EventMachine.run do
-        web_app = App.new(controller, build_interval)
+
+        web_app = App.new(controller)
 
         dispatch = Rack::Builder.app do
           map '/' do

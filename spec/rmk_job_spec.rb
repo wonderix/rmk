@@ -44,7 +44,7 @@ describe Rmk::Job do
     job = Rmk::Job.new('job1', PLAN, [1, 2]) do |a, b, hidden|
       expect(a).to be 1
       expect(b).to be 2
-      expect(hidden).to satisfy{ |h| h.is_a?(Hash) }
+      expect(hidden).to satisfy { |h| h.is_a?(Hash) }
     end
     job.build(Rmk::AlwaysBuildPolicy.new)
     job.result
@@ -64,7 +64,6 @@ describe Rmk::Job do
   end
 
   it 'handle exceptions correct' do
-
     job = Rmk::Job.new('job1', PLAN, []) do
       raise StandardError, 'test'
     end
@@ -75,7 +74,6 @@ describe Rmk::Job do
   end
 
   it 'propagate exceptions' do
-
     job1 = Rmk::Job.new('job1', PLAN, []) do
       raise StandardError, 'test'
     end
