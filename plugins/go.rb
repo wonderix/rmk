@@ -25,6 +25,18 @@ module Go
     end
   end
 
+  def go_check_fmt(package)
+    go_files(package).map do |file|
+      job('go/check_fmt/' + File.basename(file, '.go'), file) do |file|  # rubocop:disable Lint/ShadowingOuterLocalVariable
+        Rmk.stdout.write("gofmt -l #{file}\n")
+        stdout = StringIO.new(capture2("gofmt -l #{file}"))
+        if (stdout.gets)
+          raise Rmk::BuildError.new("gofmt found issues", file)
+        end
+      end
+    end
+  end
+
   def go_lint(package)
     go_files(package).map do |file|
       job('go/lint/' + File.basename(file, '.go'), file) do |file|  # rubocop:disable Lint/ShadowingOuterLocalVariable
