@@ -20,7 +20,6 @@ GEM
     eventmachine (1.2.7)
     faraday (0.15.4)
       multipart-post (>= 1.2, < 3)
-    ffi (1.11.1)
     github_api (0.18.2)
       addressable (~> 2.4)
       descendants_tracker (~> 0.0.4)
@@ -30,10 +29,6 @@ GEM
     hashie (3.6.0)
     http_parser.rb (0.6.0)
     jwt (2.2.1)
-    listen (3.1.5)
-      rb-fsevent (~> 0.9, >= 0.9.4)
-      rb-inotify (~> 0.9, >= 0.9.7)
-      ruby_dep (~> 1.2)
     multi_json (1.13.1)
     multi_xml (0.6.0)
     multipart-post (2.1.1)
@@ -45,12 +40,9 @@ GEM
       multi_xml (~> 0.5)
       rack (>= 1.2, < 3)
     public_suffix (3.1.1)
-    rack (2.0.7)
+    rack (2.0.8)
     rack-protection (2.0.5)
       rack
-    rb-fsevent (0.10.3)
-    rb-inotify (0.10.0)
-      ffi (~> 1.0)
     rspec (3.8.0)
       rspec-core (~> 3.8.0)
       rspec-expectations (~> 3.8.0)
@@ -64,7 +56,6 @@ GEM
       diff-lcs (>= 1.2.0, < 2.0)
       rspec-support (~> 3.8.0)
     rspec-support (3.8.2)
-    ruby_dep (1.5.0)
     semantic (1.6.1)
     sinatra (2.0.5)
       mustermann (~> 1.0)
@@ -96,7 +87,6 @@ DEPENDENCIES
   em-http-request
   eventmachine
   github_api
-  listen (~> 3.0)
   rspec
   semantic
   sinatra
