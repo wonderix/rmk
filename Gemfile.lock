@@ -38,7 +38,8 @@ GEM
       multi_json (~> 1.3)
       multi_xml (~> 0.5)
       rack (>= 1.2, < 3)
-    rack (2.0.7)
+    public_suffix (3.1.1)
+    rack (2.2.3)
     rack-protection (2.0.5)
       rack
     rspec (3.8.0)
