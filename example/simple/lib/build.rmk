@@ -4,7 +4,7 @@ plugin 'java'
 plugin 'maven'
 plugin 'gnu'
 
-Maven.repository = 'http://repo1.maven.org/maven2'
+Maven.repository = 'https://repo1.maven.org/maven2'
 
 def compile_cpp
   cc(glob('src/main/cpp/*.cpp'), [])

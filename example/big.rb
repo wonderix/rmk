@@ -41,7 +41,7 @@ class Project
       f.puts('def compile_cpp()')
       f.puts('  dependencies = []')
       depends.each do |p|
-        f.puts("  dependencies += project(\"../#{p.name}\").compile_cpp")
+        f.puts("  dependencies << project(\"../#{p.name}\").compile_cpp")
       end
       f.puts("  ar(\"#{name}\",cc(glob(\"*.cpp\"),dependencies))")
       f.puts('end')
@@ -74,7 +74,7 @@ File.open('big/build.rmk', 'w') do |f|
   f.puts('def all()')
   f.puts('  dependencies = []')
   projects.each do |p|
-    f.puts("  dependencies += project(\"#{p.name}\").compile_cpp")
+    f.puts("  dependencies << project(\"#{p.name}\").compile_cpp")
   end
   f.puts('  ld("main",cc(glob("*.cpp"),dependencies)+dependencies)')
   f.puts('end')

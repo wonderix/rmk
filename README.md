@@ -65,7 +65,7 @@ rmk compile_java
 plugin 'java'  # Load java support
 plugin 'maven' # Load maven support
 
-Maven.repository = "http://repo1.maven.org/maven2" # Configure maven repository
+Maven.repository = "https://repo1.maven.org/maven2" # Configure maven repository
 
 def compile_java()
   # compile all files in src/main/java/**/*.java with tapestry support

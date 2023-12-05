@@ -89,7 +89,12 @@ module Maven
 
     FileUtils.mkdir_p(File.dirname(cache))
     begin
-      @@http ||= Net::HTTP.start(@@repositroy.host, @@repositroy.port)
+      @@http ||= begin 
+        http = Net::HTTP.new(@@repositroy.host, @@repositroy.port)
+        http.use_ssl = true
+        http
+      end
+      
       request = Net::HTTP::Get.new("#{@@repositroy.request_uri}/#{artifact}")
       response = @@http.request(request)
       raise "HTTP status \"#{response.code}\"" if response.code.to_i != 200
